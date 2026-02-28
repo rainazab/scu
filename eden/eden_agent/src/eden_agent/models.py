@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -40,3 +40,54 @@ class CallPlanItem(BaseModel):
 class CallPlanResponse(BaseModel):
     total_candidates: int
     planned_calls: List[CallPlanItem]
+
+
+class SessionStartRequest(BaseModel):
+    caller_name: str
+    organization: str = "Eden"
+    notes: Optional[str] = None
+
+
+class SessionStartResponse(BaseModel):
+    session_id: str
+    caller_name: str
+    organization: str
+
+
+class SessionEvent(BaseModel):
+    type: str
+    payload: Dict[str, str] = Field(default_factory=dict)
+
+
+class SessionState(BaseModel):
+    session_id: str
+    caller_name: str
+    organization: str
+    notes: Optional[str] = None
+    events: List[SessionEvent] = Field(default_factory=list)
+
+
+class CallScriptRequest(BaseModel):
+    session_id: str
+    shelter_id: str
+    survivor_needs: Optional[str] = None
+    language: Optional[str] = None
+
+
+class EscalationDecision(BaseModel):
+    requires_human_handoff: bool
+    reason: str
+
+
+class SafetyCheckResult(BaseModel):
+    blocked_topics: List[str]
+    required_disclaimer: str
+    escalation: EscalationDecision
+
+
+class CallScriptResponse(BaseModel):
+    shelter_id: str
+    shelter_name: str
+    generated_with_llm: bool
+    script: str
+    safety: SafetyCheckResult

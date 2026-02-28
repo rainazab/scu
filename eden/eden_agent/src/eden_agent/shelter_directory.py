@@ -18,6 +18,12 @@ class ShelterDirectory:
     def all(self) -> List[Shelter]:
         return self._shelters
 
+    def get_by_id(self, shelter_id: str) -> Optional[Shelter]:
+        for shelter in self._shelters:
+            if shelter.id == shelter_id:
+                return shelter
+        return None
+
     def search(
         self,
         *,

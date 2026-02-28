@@ -11,6 +11,8 @@ class Settings:
         self.environment = os.getenv("EDEN_ENV", "development")
         self.data_path = os.getenv("EDEN_DATA_PATH", "data/shelters.sample.json")
         self.default_state = os.getenv("EDEN_DEFAULT_STATE", "CA")
+        self.openai_api_key = os.getenv("EDEN_OPENAI_API_KEY", "")
+        self.openai_model = os.getenv("EDEN_OPENAI_MODEL", "gpt-4o-mini")
 
 
 settings = Settings()
