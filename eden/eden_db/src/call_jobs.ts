@@ -18,9 +18,17 @@ export interface CallAttempt {
   shelter_name: string;
   to_phone: string | null;
   status: CallAttemptStatus;
+  generated_script?: string;
   provider_call_sid?: string;
   error?: string;
   transcript_excerpt?: string;
+  parsed_transcript?: {
+    availability_status: "available" | "waitlist" | "unknown";
+    reported_available_beds?: number;
+    intake_requirements: string[];
+    needs_human_followup: boolean;
+    summary: string;
+  };
   updated_at: string;
 }
 

@@ -2,6 +2,7 @@
 
 ## Scope
 Phase 2A adds an outbound call queue skeleton and Twilio webhook handling in addition to the shelter geospatial API.
+Phase 2B adds AI-assisted call script generation and transcript parsing with a deterministic fallback.
 
 ## Local Development
 ```bash
@@ -33,8 +34,10 @@ python3 import_data.py
 - `GET /api/shelters`
 - `GET /api/shelters/:id`
 - `POST /api/calls/jobs`
+- `POST /api/calls/script-preview`
 - `GET /api/calls/jobs`
 - `GET /api/calls/jobs/:job_id`
+- `POST /api/calls/parse-transcript`
 - `POST /webhooks/twilio/status`
 - `POST /webhooks/twilio/transcript`
 
@@ -42,3 +45,4 @@ python3 import_data.py
 - `analytics_benchmarks` remains for benchmarking experiments only.
 - Default mode is `EDEN_CALL_MODE=dry_run` to avoid accidental outbound calls.
 - Twilio live calls require `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER`.
+- AI features use `OPENAI_API_KEY` when configured; otherwise fallback logic remains active.

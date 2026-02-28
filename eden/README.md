@@ -18,11 +18,15 @@ This repo is being rebuilt from the original CalHacks code in short phases so ea
 - Updated importer to load shelter records from DV seed format
 - Updated setup/dev docs and scripts to shelter endpoints
 
-## Phase 2A (current)
+## Phase 2A
 - Added in-memory outbound call job queue and job status endpoints
 - Added Twilio call-initiation skeleton with `dry_run` default
 - Added webhook endpoints for call status and transcript snippets
 
+## Phase 2B (current)
+- Added AI/fallback call script generation for shelter outreach
+- Added transcript parsing into structured availability/intake fields
+- Added script preview and transcript parsing endpoints for fast iteration
+
 ## Next Short Phases
-- **Phase 2B:** Add AI call script generation + transcript parsing
 - **Phase 3A:** Warm transfer flow + status dashboard endpoints

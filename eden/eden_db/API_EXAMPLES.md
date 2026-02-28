@@ -46,6 +46,17 @@ curl -X POST "http://localhost:3000/api/calls/jobs" \
   }'
 ```
 
+## Preview AI call script
+```bash
+curl -X POST "http://localhost:3000/api/calls/script-preview" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "shelter_name": "Safe Harbor SF",
+    "survivor_context": "Adult survivor with one child needs same-day intake options.",
+    "callback_number": "+14155550199"
+  }'
+```
+
 ## List call jobs
 ```bash
 curl "http://localhost:3000/api/calls/jobs"
@@ -54,6 +65,15 @@ curl "http://localhost:3000/api/calls/jobs"
 ## Get call job by id
 ```bash
 curl "http://localhost:3000/api/calls/jobs/<job_id>"
+```
+
+## Parse transcript into structured outcomes
+```bash
+curl -X POST "http://localhost:3000/api/calls/parse-transcript" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transcript": "We have 2 beds available tonight. Please send ID and intake paperwork."
+  }'
 ```
 
 

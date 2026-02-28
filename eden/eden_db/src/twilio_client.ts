@@ -54,11 +54,17 @@ export function buildShelterIntakeTwiml(context: {
   shelterName: string;
   survivorContext: string;
   callbackNumber?: string;
+  scriptText?: string;
 }): string {
   const safeContext = context.survivorContext.replace(/[<>&'"]/g, "");
+  const safeScript = context.scriptText?.replace(/[<>&'"]/g, "");
   const callbackLine = context.callbackNumber
     ? ` Please call back ${context.callbackNumber} if disconnected.`
     : "";
+
+  if (safeScript) {
+    return ["<Response>", `<Say voice="Polly.Joanna">${safeScript}</Say>`, "</Response>"].join("");
+  }
 
   return [
     "<Response>",

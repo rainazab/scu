@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { Pool } from "pg";
 import { CallJobStore, CallMode, ShelterCallTarget } from "./call_jobs";
 import { buildShelterIntakeTwiml, createTwilioCall, TwilioConfig } from "./twilio_client";
+import { generateCallScript, parseTranscript } from "./ai_agent";
 
 dotenv.config();
 
@@ -280,6 +281,15 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
     });
 
     for (const attempt of job.attempts) {
+      const scriptResult = await generateCallScript({
+        shelterName: attempt.shelter_name,
+        survivorContext,
+        callbackNumber,
+      });
+      callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+        generated_script: scriptResult.script,
+      });
+
       if (!attempt.to_phone) {
         callJobs.markAttempt(job.job_id, attempt.attempt_id, {
           status: "failed",
@@ -301,6 +311,7 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
           shelterName: attempt.shelter_name,
           survivorContext,
           callbackNumber,
+          scriptText: scriptResult.script,
         });
         const { sid } = await createTwilioCall(twilioConfig, {
           to: attempt.to_phone,
@@ -328,6 +339,29 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : "Unknown error",
     });
   }
+});
+
+app.post("/api/calls/script-preview", async (req: Request, res: Response) => {
+  const shelterName = String(req.body.shelter_name || "").trim();
+  const survivorContext = String(req.body.survivor_context || "").trim();
+  const callbackNumber = req.body.callback_number ? String(req.body.callback_number) : undefined;
+
+  if (!shelterName || !survivorContext) {
+    return res.status(400).json({
+      error: "shelter_name and survivor_context are required.",
+    });
+  }
+
+  const scriptResult = await generateCallScript({
+    shelterName,
+    survivorContext,
+    callbackNumber,
+  });
+  return res.json({
+    success: true,
+    source: scriptResult.source,
+    script: scriptResult.script,
+  });
 });
 
 app.get("/api/calls/jobs", (_req: Request, res: Response) => {
@@ -368,10 +402,33 @@ app.post("/webhooks/twilio/transcript", (req: Request, res: Response) => {
   const linked = callJobs.findByProviderSid(sid);
   if (!linked) return res.status(200).json({ success: true, ignored: true });
 
-  callJobs.markAttempt(linked.job.job_id, linked.attempt.attempt_id, {
-    transcript_excerpt: transcript.slice(0, 500),
+  const excerpt = transcript.slice(0, 500);
+  parseTranscript(transcript)
+    .then((result) => {
+      callJobs.markAttempt(linked.job.job_id, linked.attempt.attempt_id, {
+        transcript_excerpt: excerpt,
+        parsed_transcript: result.parsed,
+      });
+    })
+    .catch(() => {
+      callJobs.markAttempt(linked.job.job_id, linked.attempt.attempt_id, {
+        transcript_excerpt: excerpt,
+      });
+    });
+  return res.status(200).json({ success: true, accepted: true });
+});
+
+app.post("/api/calls/parse-transcript", async (req: Request, res: Response) => {
+  const transcript = String(req.body.transcript || "").trim();
+  if (!transcript) {
+    return res.status(400).json({ error: "transcript is required." });
+  }
+  const parsed = await parseTranscript(transcript);
+  return res.json({
+    success: true,
+    source: parsed.source,
+    parsed: parsed.parsed,
   });
-  return res.status(200).json({ success: true });
 });
 
 app.listen(port, () => {
