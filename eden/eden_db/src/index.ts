@@ -239,7 +239,7 @@ async function queryNearestShelters(params: {
     SELECT
       id, shelter_name, intake_phone, address, city, state,
       accepts_children, accepts_pets,
-      ST_Distance(coordinates, ST_GeogFromText('POINT($1 $2)')) AS distance_meters
+      ST_Distance(coordinates, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_meters
     FROM shelters
     ${where}
     ORDER BY distance_meters ASC
@@ -418,14 +418,14 @@ app.get("/api/shelters/nearest", async (req: Request, res: Response) => {
         last_verified_at,
         latitude,
         longitude,
-        ST_Distance(coordinates, ST_GeogFromText('POINT($1 $2)')) AS distance_meters
+        ST_Distance(coordinates, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_meters
       FROM shelters
       WHERE coordinates IS NOT NULL
     `;
 
     if (maxDistanceMeters !== null && !Number.isNaN(maxDistanceMeters)) {
       values.push(maxDistanceMeters);
-      query += ` AND ST_DWithin(coordinates, ST_GeogFromText('POINT($1 $2)'), $3)`;
+      query += ` AND ST_DWithin(coordinates, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)`;
     }
 
     query += ` ORDER BY distance_meters ASC LIMIT ${resultLimit}`;
