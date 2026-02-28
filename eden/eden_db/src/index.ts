@@ -6,6 +6,8 @@ import { CallJobStore, CallMode, ShelterCallTarget } from "./call_jobs";
 import { buildConferenceJoinTwiml, buildShelterIntakeTwiml, createTwilioCall, TwilioConfig } from "./twilio_client";
 import { generateCallScript, parseTranscript } from "./ai_agent";
 import { WarmTransferMode, WarmTransferStore } from "./warm_transfer";
+import { SafetyControls } from "./safety_controls";
+import { PersistenceService } from "./persistence";
 
 dotenv.config();
 
@@ -18,6 +20,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const callJobs = new CallJobStore();
 const warmTransfers = new WarmTransferStore();
+const safetyControls = new SafetyControls();
 const defaultCallMode: CallMode = process.env.EDEN_CALL_MODE === "live" ? "live" : "dry_run";
 const twilioConfig: TwilioConfig = {
   accountSid: process.env.TWILIO_ACCOUNT_SID || "",
@@ -35,6 +38,7 @@ const pool = new Pool({
   user: process.env.DB_USER || "postgres",
   password: process.env.DB_PASSWORD || "postgres",
 });
+const persistence = new PersistenceService(pool);
 
 pool.on("connect", () => {
   console.log("Connected to PostgreSQL database");
@@ -47,6 +51,63 @@ pool.on("error", (err) => {
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", message: "Eden shelter API is running" });
+});
+
+app.get("/api/safety/config", (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    config: safetyControls.config(),
+  });
+});
+
+app.get("/api/safety/no-callback-numbers", (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    count: safetyControls.listBlockedNumbers().length,
+    numbers: safetyControls.listBlockedNumbers(),
+  });
+});
+
+app.post("/api/safety/no-callback-numbers", (req: Request, res: Response) => {
+  const number = String(req.body.number || "");
+  const result = safetyControls.addBlockedNumber(number);
+  if (!result.normalized) {
+    return res.status(400).json({ error: "number is required and must be parseable." });
+  }
+  void persistence.upsertBlockedNumber(result.normalized).catch((error) => {
+    console.error("Failed to persist blocked number", { number: result.normalized, error });
+  });
+  return res.status(201).json({
+    success: true,
+    added: result.added,
+    number: result.normalized,
+  });
+});
+
+app.delete("/api/safety/no-callback-numbers", (req: Request, res: Response) => {
+  const number = String(req.body.number || "");
+  const result = safetyControls.removeBlockedNumber(number);
+  if (!result.normalized) {
+    return res.status(400).json({ error: "number is required and must be parseable." });
+  }
+  void persistence.deleteBlockedNumber(result.normalized).catch((error) => {
+    console.error("Failed to remove blocked number from persistence", { number: result.normalized, error });
+  });
+  return res.json({
+    success: true,
+    removed: result.removed,
+    number: result.normalized,
+  });
+});
+
+app.get("/api/safety/escalations", (req: Request, res: Response) => {
+  const limit = Math.max(1, Math.min(Number(req.query.limit || 100), 500));
+  const escalations = safetyControls.listEscalations(limit);
+  return res.json({
+    success: true,
+    count: escalations.length,
+    escalations,
+  });
 });
 
 function validateCoordinates(lat: number, lon: number): string | null {
@@ -81,6 +142,35 @@ function ensureTwilioConfigured(mode: CallMode): string | null {
 function isTerminalCallStatus(status: string): boolean {
   const normalized = status.toLowerCase();
   return ["completed", "failed", "busy", "no-answer", "canceled"].includes(normalized);
+}
+
+function persistCallJobState(jobId: string): void {
+  const job = callJobs.getJob(jobId);
+  if (!job) return;
+  void persistence.upsertCallJob(job).catch((error) => {
+    console.error("Failed to persist call job", { jobId, error });
+  });
+}
+
+function persistWarmTransferState(transferId: string): void {
+  const transfer = warmTransfers.getSession(transferId);
+  if (!transfer) return;
+  void persistence.upsertWarmTransfer(transfer).catch((error) => {
+    console.error("Failed to persist warm transfer", { transferId, error });
+  });
+}
+
+function recordEscalationAndPersist(input: {
+  source: "call_job" | "warm_transfer" | "transcript";
+  reference_id: string;
+  reason: string;
+  details?: string;
+}) {
+  const escalation = safetyControls.recordEscalation(input);
+  void persistence.insertEscalation(escalation).catch((error) => {
+    console.error("Failed to persist escalation event", { escalationId: escalation.escalation_id, error });
+  });
+  return escalation;
 }
 
 app.get("/api/shelters/nearest", async (req: Request, res: Response) => {
@@ -254,17 +344,41 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
   try {
     const shelterIdsRaw = Array.isArray(req.body.shelter_ids) ? req.body.shelter_ids : [];
     const shelterIds = shelterIdsRaw.map((v: unknown) => Number(v)).filter((v: number) => Number.isInteger(v));
-    const survivorContext = String(req.body.survivor_context || "").trim();
+    const survivorContextRaw = String(req.body.survivor_context || "").trim();
     const callbackNumber = req.body.callback_number ? String(req.body.callback_number) : undefined;
+    const anonymousMode = Boolean(req.body.anonymous_mode);
+    const escalationApproved = Boolean(req.body.escalation_approved);
     const requestedMode = req.body.mode === "live" ? "live" : req.body.mode === "dry_run" ? "dry_run" : undefined;
     const mode: CallMode = requestedMode || defaultCallMode;
 
     if (shelterIds.length === 0) {
       return res.status(400).json({ error: "shelter_ids must include at least one shelter ID." });
     }
-    if (!survivorContext) {
+    if (!survivorContextRaw) {
       return res.status(400).json({ error: "survivor_context is required." });
     }
+    if (callbackNumber && safetyControls.isBlockedNumber(callbackNumber)) {
+      return res.status(403).json({ error: "callback_number is blocked by no-call-back safety policy." });
+    }
+
+    const risk = safetyControls.assessRisk(survivorContextRaw);
+    if (mode === "live" && safetyControls.shouldBlockLiveAction(risk, escalationApproved)) {
+      const escalation = recordEscalationAndPersist({
+        source: "call_job",
+        reference_id: "pending-call-job",
+        reason: "High-risk request blocked from live calls without escalation approval.",
+        details: `Matched keywords: ${risk.matched_keywords.join(", ")}`,
+      });
+      return res.status(409).json({
+        error: "Live call blocked pending human escalation.",
+        risk,
+        escalation,
+      });
+    }
+
+    const survivorContext = anonymousMode
+      ? safetyControls.redactForAnonymousMode(survivorContextRaw)
+      : survivorContextRaw;
 
     const twilioError = ensureTwilioConfigured(mode);
     if (twilioError) return res.status(400).json({ error: twilioError });
@@ -285,25 +399,38 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
     const job = callJobs.createJob({
       mode,
       survivor_context: survivorContext,
-      callback_number: callbackNumber,
+      callback_number: anonymousMode ? undefined : callbackNumber,
+      anonymous_mode: anonymousMode,
+      escalation_approved: escalationApproved,
       targets,
     });
+    persistCallJobState(job.job_id);
 
     for (const attempt of job.attempts) {
       const scriptResult = await generateCallScript({
         shelterName: attempt.shelter_name,
         survivorContext,
-        callbackNumber,
+        callbackNumber: anonymousMode ? undefined : callbackNumber,
       });
       callJobs.markAttempt(job.job_id, attempt.attempt_id, {
         generated_script: scriptResult.script,
       });
+      persistCallJobState(job.job_id);
 
       if (!attempt.to_phone) {
         callJobs.markAttempt(job.job_id, attempt.attempt_id, {
           status: "failed",
           error: "Shelter does not have intake_phone configured.",
         });
+        persistCallJobState(job.job_id);
+        continue;
+      }
+      if (safetyControls.isBlockedNumber(attempt.to_phone)) {
+        callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+          status: "failed",
+          error: "Destination number blocked by no-call-back safety policy.",
+        });
+        persistCallJobState(job.job_id);
         continue;
       }
 
@@ -312,6 +439,7 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
           status: "completed",
           provider_call_sid: `DRYRUN-${attempt.attempt_id}`,
         });
+        persistCallJobState(job.job_id);
         continue;
       }
 
@@ -319,7 +447,7 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
         const twiml = buildShelterIntakeTwiml({
           shelterName: attempt.shelter_name,
           survivorContext,
-          callbackNumber,
+          callbackNumber: anonymousMode ? undefined : callbackNumber,
           scriptText: scriptResult.script,
         });
         const { sid } = await createTwilioCall(twilioConfig, {
@@ -328,11 +456,13 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
         });
         callJobs.bindProviderSid(job.job_id, attempt.attempt_id, sid);
         callJobs.markAttempt(job.job_id, attempt.attempt_id, { status: "initiated" });
+        persistCallJobState(job.job_id);
       } catch (error) {
         callJobs.markAttempt(job.job_id, attempt.attempt_id, {
           status: "failed",
           error: error instanceof Error ? error.message : "Unknown Twilio error",
         });
+        persistCallJobState(job.job_id);
       }
     }
 
@@ -352,23 +482,28 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
 
 app.post("/api/calls/script-preview", async (req: Request, res: Response) => {
   const shelterName = String(req.body.shelter_name || "").trim();
-  const survivorContext = String(req.body.survivor_context || "").trim();
+  const survivorContextRaw = String(req.body.survivor_context || "").trim();
   const callbackNumber = req.body.callback_number ? String(req.body.callback_number) : undefined;
+  const anonymousMode = Boolean(req.body.anonymous_mode);
 
-  if (!shelterName || !survivorContext) {
+  if (!shelterName || !survivorContextRaw) {
     return res.status(400).json({
       error: "shelter_name and survivor_context are required.",
     });
   }
+  const survivorContext = anonymousMode
+    ? safetyControls.redactForAnonymousMode(survivorContextRaw)
+    : survivorContextRaw;
 
   const scriptResult = await generateCallScript({
     shelterName,
     survivorContext,
-    callbackNumber,
+    callbackNumber: anonymousMode ? undefined : callbackNumber,
   });
   return res.json({
     success: true,
     source: scriptResult.source,
+    anonymous_mode: anonymousMode,
     script: scriptResult.script,
   });
 });
@@ -400,6 +535,7 @@ app.post("/webhooks/twilio/status", (req: Request, res: Response) => {
   callJobs.markAttempt(linked.job.job_id, linked.attempt.attempt_id, {
     status: mapTwilioStatus(status),
   });
+  persistCallJobState(linked.job.job_id);
   return res.status(200).send("OK");
 });
 
@@ -418,11 +554,21 @@ app.post("/webhooks/twilio/transcript", (req: Request, res: Response) => {
         transcript_excerpt: excerpt,
         parsed_transcript: result.parsed,
       });
+      persistCallJobState(linked.job.job_id);
+      if (result.parsed.needs_human_followup) {
+        recordEscalationAndPersist({
+          source: "transcript",
+          reference_id: linked.job.job_id,
+          reason: "Transcript indicates human follow-up required.",
+          details: result.parsed.summary,
+        });
+      }
     })
     .catch(() => {
       callJobs.markAttempt(linked.job.job_id, linked.attempt.attempt_id, {
         transcript_excerpt: excerpt,
       });
+      persistCallJobState(linked.job.job_id);
     });
   return res.status(200).json({ success: true, accepted: true });
 });
@@ -433,6 +579,14 @@ app.post("/api/calls/parse-transcript", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "transcript is required." });
   }
   const parsed = await parseTranscript(transcript);
+  if (parsed.parsed.needs_human_followup) {
+    recordEscalationAndPersist({
+      source: "transcript",
+      reference_id: "manual-parse",
+      reason: "Manual transcript parse indicates human follow-up required.",
+      details: parsed.parsed.summary,
+    });
+  }
   return res.json({
     success: true,
     source: parsed.source,
@@ -446,7 +600,9 @@ app.post("/api/warm-transfers", async (req: Request, res: Response) => {
     const attemptId = String(req.body.attempt_id || "").trim();
     const survivorPhone = String(req.body.survivor_phone || "").trim();
     const survivorName = req.body.survivor_name ? String(req.body.survivor_name) : undefined;
-    const notes = req.body.notes ? String(req.body.notes) : undefined;
+    const notesRaw = req.body.notes ? String(req.body.notes) : undefined;
+    const anonymousMode = Boolean(req.body.anonymous_mode);
+    const escalationApproved = Boolean(req.body.escalation_approved);
     const requestedMode = req.body.mode === "live" ? "live" : req.body.mode === "dry_run" ? "dry_run" : undefined;
     const mode: WarmTransferMode = requestedMode || defaultCallMode;
 
@@ -454,6 +610,9 @@ app.post("/api/warm-transfers", async (req: Request, res: Response) => {
       return res.status(400).json({
         error: "job_id, attempt_id, and survivor_phone are required.",
       });
+    }
+    if (safetyControls.isBlockedNumber(survivorPhone)) {
+      return res.status(403).json({ error: "survivor_phone is blocked by no-call-back safety policy." });
     }
 
     const twilioError = ensureTwilioConfigured(mode);
@@ -464,6 +623,29 @@ app.post("/api/warm-transfers", async (req: Request, res: Response) => {
     const attempt = job.attempts.find((a) => a.attempt_id === attemptId);
     if (!attempt) return res.status(404).json({ error: "Call attempt not found on this job." });
     if (!attempt.to_phone) return res.status(400).json({ error: "Shelter attempt has no destination phone." });
+    if (safetyControls.isBlockedNumber(attempt.to_phone)) {
+      return res.status(403).json({ error: "Shelter destination number blocked by no-call-back safety policy." });
+    }
+
+    const notes = notesRaw
+      ? anonymousMode
+        ? safetyControls.redactForAnonymousMode(notesRaw)
+        : notesRaw
+      : undefined;
+    const risk = safetyControls.assessRisk(`${notesRaw || ""} ${attempt.parsed_transcript?.summary || ""}`);
+    if (mode === "live" && safetyControls.shouldBlockLiveAction(risk, escalationApproved)) {
+      const escalation = recordEscalationAndPersist({
+        source: "warm_transfer",
+        reference_id: jobId,
+        reason: "High-risk warm transfer blocked from live mode without escalation approval.",
+        details: `Matched keywords: ${risk.matched_keywords.join(", ")}`,
+      });
+      return res.status(409).json({
+        error: "Live warm transfer blocked pending human escalation.",
+        risk,
+        escalation,
+      });
+    }
 
     const transfer = warmTransfers.createSession({
       mode,
@@ -472,14 +654,16 @@ app.post("/api/warm-transfers", async (req: Request, res: Response) => {
       shelter_name: attempt.shelter_name,
       shelter_phone: attempt.to_phone,
       survivor_phone: survivorPhone,
-      survivor_name: survivorName,
+      survivor_name: anonymousMode ? undefined : survivorName,
       notes,
     });
+    persistWarmTransferState(transfer.transfer_id);
 
     if (mode === "dry_run") {
       warmTransfers.bindCallSid(transfer.transfer_id, "survivor", `DRYRUN-SURVIVOR-${transfer.transfer_id}`);
       warmTransfers.bindCallSid(transfer.transfer_id, "shelter", `DRYRUN-SHELTER-${transfer.transfer_id}`);
       warmTransfers.setStatus(transfer.transfer_id, "bridged");
+      persistWarmTransferState(transfer.transfer_id);
       return res.status(201).json({
         success: true,
         message: "Dry-run warm transfer simulated.",
@@ -489,6 +673,7 @@ app.post("/api/warm-transfers", async (req: Request, res: Response) => {
 
     const conferenceTwiml = buildConferenceJoinTwiml(transfer.conference_name);
     warmTransfers.setStatus(transfer.transfer_id, "connecting");
+    persistWarmTransferState(transfer.transfer_id);
     try {
       const [survivorCall, shelterCall] = await Promise.all([
         createTwilioCall(twilioConfig, {
@@ -505,8 +690,16 @@ app.post("/api/warm-transfers", async (req: Request, res: Response) => {
       warmTransfers.bindCallSid(transfer.transfer_id, "survivor", survivorCall.sid);
       warmTransfers.bindCallSid(transfer.transfer_id, "shelter", shelterCall.sid);
       warmTransfers.setStatus(transfer.transfer_id, "bridged");
+      persistWarmTransferState(transfer.transfer_id);
     } catch (error) {
       warmTransfers.setStatus(transfer.transfer_id, "failed");
+      persistWarmTransferState(transfer.transfer_id);
+      recordEscalationAndPersist({
+        source: "warm_transfer",
+        reference_id: transfer.transfer_id,
+        reason: "Warm transfer failed to initiate.",
+        details: error instanceof Error ? error.message : "Unknown Twilio error",
+      });
       return res.status(502).json({
         error: "Failed to initiate warm transfer",
         message: error instanceof Error ? error.message : "Unknown Twilio error",
@@ -563,6 +756,7 @@ app.post("/webhooks/twilio/warm-transfer-status", (req: Request, res: Response) 
   } else {
     warmTransfers.setStatus(linked.session.transfer_id, "connecting");
   }
+  persistWarmTransferState(linked.session.transfer_id);
   return res.status(200).send("OK");
 });
 
@@ -615,6 +809,10 @@ app.get("/api/dashboard/overview", async (_req: Request, res: Response) => {
         completed: transfers.filter((t) => t.status === "completed").length,
         failed: transfers.filter((t) => t.status === "failed").length,
       },
+      safety: {
+        blocked_numbers: safetyControls.listBlockedNumbers().length,
+        escalation_events: safetyControls.listEscalations(1000).length,
+      },
     };
 
     return res.json(response);
@@ -629,17 +827,36 @@ app.get("/api/dashboard/overview", async (_req: Request, res: Response) => {
 app.get("/api/dashboard/activity", (_req: Request, res: Response) => {
   const jobs = callJobs.listJobs().slice(0, 10);
   const transfers = warmTransfers.listSessions().slice(0, 10);
+  const escalations = safetyControls.listEscalations(10);
   return res.json({
     success: true,
     recent_call_jobs: jobs,
     recent_warm_transfers: transfers,
+    recent_escalations: escalations,
   });
 });
 
+async function bootstrapPersistence(): Promise<void> {
+  if (!persistence.isEnabled()) return;
+  await persistence.ensureSchema();
+
+  const persistedBlocked = await persistence.listBlockedNumbers();
+  persistedBlocked.forEach((num) => {
+    safetyControls.addBlockedNumber(num);
+  });
+
+  const persistedEscalations = await persistence.listEscalations(500);
+  safetyControls.seedEscalations(persistedEscalations);
+}
+
 app.listen(port, () => {
+  void bootstrapPersistence().catch((error) => {
+    console.error("Persistence bootstrap failed", error);
+  });
   console.log(`Eden shelter API running on http://localhost:${port}`);
   console.log(`Nearest shelters: http://localhost:${port}/api/shelters/nearest?lat=37.7749&lon=-122.4194`);
   console.log(`Call mode: ${defaultCallMode}`);
+  console.log(`Persistence enabled: ${persistence.isEnabled()}`);
 });
 
 process.on("SIGTERM", async () => {

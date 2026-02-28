@@ -41,6 +41,8 @@ export interface CallJob {
   request: {
     survivor_context: string;
     callback_number?: string;
+    anonymous_mode?: boolean;
+    escalation_approved?: boolean;
     shelter_ids: number[];
   };
   attempts: CallAttempt[];
@@ -54,6 +56,8 @@ export class CallJobStore {
     mode: CallMode;
     survivor_context: string;
     callback_number?: string;
+    anonymous_mode?: boolean;
+    escalation_approved?: boolean;
     targets: ShelterCallTarget[];
   }): CallJob {
     const now = new Date().toISOString();
@@ -76,6 +80,8 @@ export class CallJobStore {
       request: {
         survivor_context: params.survivor_context,
         callback_number: params.callback_number,
+        anonymous_mode: params.anonymous_mode,
+        escalation_approved: params.escalation_approved,
         shelter_ids: params.targets.map((t) => t.id),
       },
       attempts,

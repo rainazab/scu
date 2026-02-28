@@ -28,10 +28,22 @@ This repo is being rebuilt from the original CalHacks code in short phases so ea
 - Added transcript parsing into structured availability/intake fields
 - Added script preview and transcript parsing endpoints for fast iteration
 
-## Phase 3A (current)
+## Phase 3A
 - Added warm transfer orchestration endpoints with dry-run/live support
 - Added Twilio conference-bridge skeleton for survivor+shelter connection
 - Added dashboard endpoints for shelter/call/transfer operations metrics
 
+## Phase 4A
+- Added no-call-back deny list API and enforcement on call/warm-transfer actions
+- Added anonymous mode redaction + callback suppression options
+- Added escalation policy enforcement for high-risk live operations
+- Added safety dashboard signals and escalation event logging
+
+## Phase 5A (current)
+- Added Postgres persistence for call jobs and warm transfer sessions
+- Added persisted escalation events and blocked numbers
+- Added startup bootstrap to load persisted safety state into runtime
+- Added persistence schema for operational state tables
+
 ## Next Short Phases
-- **Phase 4A:** Safety controls (anonymous mode, no-call-back list, escalation policies)
+- **Phase 5B:** auth/role controls for admin/safety endpoints

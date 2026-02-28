@@ -42,7 +42,8 @@ curl -X POST "http://localhost:3000/api/calls/jobs" \
     "mode": "dry_run",
     "shelter_ids": [1, 2, 3],
     "survivor_context": "Adult survivor with one child needs same-day intake options.",
-    "callback_number": "+14155550199"
+    "callback_number": "+14155550199",
+    "anonymous_mode": false
   }'
 ```
 
@@ -85,7 +86,8 @@ curl -X POST "http://localhost:3000/api/warm-transfers" \
     "job_id": "<job_id>",
     "attempt_id": "<attempt_id>",
     "survivor_phone": "+14155550199",
-    "survivor_name": "Jane Doe"
+    "survivor_name": "Jane Doe",
+    "anonymous_mode": true
   }'
 ```
 
@@ -102,6 +104,23 @@ curl "http://localhost:3000/api/dashboard/overview"
 ## Dashboard activity
 ```bash
 curl "http://localhost:3000/api/dashboard/activity"
+```
+
+## Safety: add blocked number
+```bash
+curl -X POST "http://localhost:3000/api/safety/no-callback-numbers" \
+  -H "Content-Type: application/json" \
+  -d '{"number":"+14155550199"}'
+```
+
+## Safety: list blocked numbers
+```bash
+curl "http://localhost:3000/api/safety/no-callback-numbers"
+```
+
+## Safety: list escalation events
+```bash
+curl "http://localhost:3000/api/safety/escalations"
 ```
 
 
