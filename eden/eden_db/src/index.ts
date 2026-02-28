@@ -125,14 +125,14 @@ app.get("/api/shelters/nearest", async (req: Request, res: Response) => {
         last_verified_at,
         latitude,
         longitude,
-        ST_Distance(coordinates, ST_GeogFromText('POINT($1 $2)')) AS distance_meters
+        ST_Distance(coordinates, ST_MakePoint($1::float, $2::float)::geography) AS distance_meters
       FROM shelters
       WHERE coordinates IS NOT NULL
     `;
 
     if (maxDistanceMeters !== null && !Number.isNaN(maxDistanceMeters)) {
       values.push(maxDistanceMeters);
-      query += ` AND ST_DWithin(coordinates, ST_GeogFromText('POINT($1 $2)'), $3)`;
+      query += ` AND ST_DWithin(coordinates, ST_MakePoint($1::float, $2::float)::geography, $3)`;
     }
 
     query += ` ORDER BY distance_meters ASC LIMIT ${resultLimit}`;
