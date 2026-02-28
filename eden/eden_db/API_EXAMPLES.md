@@ -77,6 +77,26 @@ curl -X POST "http://localhost:3000/api/calls/parse-transcript" \
   }'
 ```
 
+## Start intake request
+```bash
+curl -X POST "http://localhost:3000/api/intake" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "needs": ["shelter", "food"],
+    "people_count": 2,
+    "has_children": true,
+    "has_pets": false,
+    "location": "Mission District, SF",
+    "notes": "need wheelchair access",
+    "callback_number": "+14155550199"
+  }'
+```
+
+## Poll intake status
+```bash
+curl "http://localhost:3000/api/intake/status/<job_id>"
+```
+
 ## Start warm transfer (dry-run)
 ```bash
 curl -X POST "http://localhost:3000/api/warm-transfers" \
@@ -121,6 +141,11 @@ curl "http://localhost:3000/api/safety/no-callback-numbers"
 ## Safety: list escalation events
 ```bash
 curl "http://localhost:3000/api/safety/escalations"
+```
+
+## Reset demo state
+```bash
+curl -X POST "http://localhost:3000/api/demo/reset"
 ```
 
 

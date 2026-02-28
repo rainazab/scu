@@ -340,15 +340,28 @@ function applyDemoProgress(jobId: string): void {
   const second = attempts[1];
   const third = attempts[2];
 
-  if (first && elapsedMs >= 2000 && first.status === "queued") {
+  if (first && elapsedMs >= 200 && first.status === "queued") {
+    callJobs.markAttempt(jobId, first.attempt_id, { status: "initiated" });
+    persistCallJobState(jobId);
+  }
+
+  if (first && elapsedMs >= 2000 && first.status === "initiated") {
     callJobs.markAttempt(jobId, first.attempt_id, { status: "failed", error: "no beds" });
     persistCallJobState(jobId);
   }
-  if (second && elapsedMs >= 4000 && second.status === "queued") {
+  if (second && elapsedMs >= 2200 && second.status === "queued") {
+    callJobs.markAttempt(jobId, second.attempt_id, { status: "initiated" });
+    persistCallJobState(jobId);
+  }
+  if (second && elapsedMs >= 4000 && second.status === "initiated") {
     callJobs.markAttempt(jobId, second.attempt_id, { status: "failed", error: "no beds" });
     persistCallJobState(jobId);
   }
-  if (third && elapsedMs >= 7000 && third.status === "queued") {
+  if (third && elapsedMs >= 4200 && third.status === "queued") {
+    callJobs.markAttempt(jobId, third.attempt_id, { status: "initiated" });
+    persistCallJobState(jobId);
+  }
+  if (third && elapsedMs >= 7000 && third.status === "initiated") {
     callJobs.markAttempt(jobId, third.attempt_id, {
       status: "completed",
       parsed_transcript: {
@@ -734,8 +747,6 @@ app.post("/webhooks/twilio/status", (req: Request, res: Response) => {
 app.post("/webhooks/twilio/recording", (req: Request, res: Response) => {
   const sid = String(req.body.CallSid || "");
   const recordingUrl = String(req.body.RecordingUrl || "");
-  const recordingDuration = String(req.body.RecordingDuration || "");
-  const recordingSid = String(req.body.RecordingSid || "");
   if (!sid) return res.status(400).json({ error: "Missing CallSid" });
 
   const linked = callJobs.findByProviderSid(sid);
@@ -743,11 +754,6 @@ app.post("/webhooks/twilio/recording", (req: Request, res: Response) => {
 
   callJobs.markAttempt(linked.job.job_id, linked.attempt.attempt_id, {
     recording_url: recordingUrl || undefined,
-    error:
-      linked.attempt.error ||
-      (recordingSid
-        ? `recording_sid=${recordingSid}${recordingDuration ? ` duration=${recordingDuration}s` : ""}`
-        : undefined),
   });
   persistCallJobState(linked.job.job_id);
   return res.status(200).json({ success: true });
@@ -812,7 +818,7 @@ app.post("/api/intake", async (req: Request, res: Response) => {
   try {
     const needs = (Array.isArray(req.body.needs) ? req.body.needs : [])
       .map((x: unknown) => String(x))
-      .filter((x) => x.length > 0) as IntakeNeed[];
+      .filter((x: string) => x.length > 0) as IntakeNeed[];
     const peopleCount = Number(req.body.people_count || 1);
     const hasChildren = Boolean(req.body.has_children);
     const hasPets = Boolean(req.body.has_pets);

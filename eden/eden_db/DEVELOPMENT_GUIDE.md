@@ -6,6 +6,7 @@ Phase 2B adds AI-assisted call script generation and transcript parsing with a d
 Phase 3A adds warm transfer orchestration and dashboard endpoints for operations visibility.
 Phase 4A adds no-call-back controls, anonymous mode, and escalation policy enforcement.
 Phase 5A persists jobs/transfers/escalations/blocked numbers to Postgres.
+Gap fill adds intake flow UI/API, dashboard UI, call recording, demo reset, and optional SMS updates.
 
 ## Local Development
 ```bash
@@ -49,6 +50,9 @@ python3 import_data.py
 - `POST /webhooks/twilio/warm-transfer-status`
 - `GET /api/dashboard/overview`
 - `GET /api/dashboard/activity`
+- `POST /api/intake`
+- `GET /api/intake/status/:job_id`
+- `POST /api/demo/reset`
 - `GET /api/safety/config`
 - `GET /api/safety/no-callback-numbers`
 - `POST /api/safety/no-callback-numbers`
@@ -66,3 +70,4 @@ python3 import_data.py
 - `EDEN_NO_CALLBACK_NUMBERS` blocks protected numbers from outbound dialing/callback usage.
 - `EDEN_REQUIRE_ESCALATION_FOR_LIVE=true` requires `escalation_approved=true` on high-risk live operations.
 - `EDEN_PERSISTENCE_ENABLED=true` stores runtime state in Postgres and restores safety data at startup.
+- `ENABLE_CALL_RECORDING=true` enables Twilio call recording callbacks.
