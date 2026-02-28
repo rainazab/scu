@@ -34,4 +34,26 @@ curl "http://localhost:3000/api/shelters?page=1&limit=10"
 curl "http://localhost:3000/api/shelters/1"
 ```
 
+## Create call job (dry-run)
+```bash
+curl -X POST "http://localhost:3000/api/calls/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "dry_run",
+    "shelter_ids": [1, 2, 3],
+    "survivor_context": "Adult survivor with one child needs same-day intake options.",
+    "callback_number": "+14155550199"
+  }'
+```
+
+## List call jobs
+```bash
+curl "http://localhost:3000/api/calls/jobs"
+```
+
+## Get call job by id
+```bash
+curl "http://localhost:3000/api/calls/jobs/<job_id>"
+```
+
 

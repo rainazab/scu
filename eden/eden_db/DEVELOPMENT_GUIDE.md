@@ -1,7 +1,7 @@
 # Eden DB Development Guide
 
 ## Scope
-Phase 1B converts the backend to a DV shelter geospatial API.
+Phase 2A adds an outbound call queue skeleton and Twilio webhook handling in addition to the shelter geospatial API.
 
 ## Local Development
 ```bash
@@ -32,7 +32,13 @@ python3 import_data.py
 - `POST /api/shelters/nearest`
 - `GET /api/shelters`
 - `GET /api/shelters/:id`
+- `POST /api/calls/jobs`
+- `GET /api/calls/jobs`
+- `GET /api/calls/jobs/:job_id`
+- `POST /webhooks/twilio/status`
+- `POST /webhooks/twilio/transcript`
 
 ## Notes
 - `analytics_benchmarks` remains for benchmarking experiments only.
-- Twilio calling, transcript parsing, and warm transfer are later phases.
+- Default mode is `EDEN_CALL_MODE=dry_run` to avoid accidental outbound calls.
+- Twilio live calls require `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER`.

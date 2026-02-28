@@ -2,6 +2,8 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { Pool } from "pg";
+import { CallJobStore, CallMode, ShelterCallTarget } from "./call_jobs";
+import { buildShelterIntakeTwiml, createTwilioCall, TwilioConfig } from "./twilio_client";
 
 dotenv.config();
 
@@ -10,6 +12,16 @@ const port = Number(process.env.PORT || 3000);
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+const callJobs = new CallJobStore();
+const defaultCallMode: CallMode = process.env.EDEN_CALL_MODE === "live" ? "live" : "dry_run";
+const twilioConfig: TwilioConfig = {
+  accountSid: process.env.TWILIO_ACCOUNT_SID || "",
+  authToken: process.env.TWILIO_AUTH_TOKEN || "",
+  fromNumber: process.env.TWILIO_FROM_NUMBER || "",
+  statusCallbackUrl: process.env.TWILIO_STATUS_CALLBACK_URL || undefined,
+};
 
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
@@ -41,6 +53,22 @@ function validateCoordinates(lat: number, lon: number): string | null {
   }
   if (lon < -180 || lon > 180) {
     return "Longitude must be between -180 and 180";
+  }
+  return null;
+}
+
+function mapTwilioStatus(status: string): "queued" | "initiated" | "completed" | "failed" {
+  const normalized = (status || "").toLowerCase();
+  if (["completed"].includes(normalized)) return "completed";
+  if (["busy", "failed", "no-answer", "canceled"].includes(normalized)) return "failed";
+  if (["initiated", "ringing", "in-progress", "answered"].includes(normalized)) return "initiated";
+  return "queued";
+}
+
+function ensureTwilioConfigured(mode: CallMode): string | null {
+  if (mode !== "live") return null;
+  if (!twilioConfig.accountSid || !twilioConfig.authToken || !twilioConfig.fromNumber) {
+    return "Live mode requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER.";
   }
   return null;
 }
@@ -212,9 +240,144 @@ app.get("/api/shelters/:id", async (req: Request, res: Response) => {
   }
 });
 
+app.post("/api/calls/jobs", async (req: Request, res: Response) => {
+  try {
+    const shelterIdsRaw = Array.isArray(req.body.shelter_ids) ? req.body.shelter_ids : [];
+    const shelterIds = shelterIdsRaw.map((v: unknown) => Number(v)).filter((v: number) => Number.isInteger(v));
+    const survivorContext = String(req.body.survivor_context || "").trim();
+    const callbackNumber = req.body.callback_number ? String(req.body.callback_number) : undefined;
+    const requestedMode = req.body.mode === "live" ? "live" : req.body.mode === "dry_run" ? "dry_run" : undefined;
+    const mode: CallMode = requestedMode || defaultCallMode;
+
+    if (shelterIds.length === 0) {
+      return res.status(400).json({ error: "shelter_ids must include at least one shelter ID." });
+    }
+    if (!survivorContext) {
+      return res.status(400).json({ error: "survivor_context is required." });
+    }
+
+    const twilioError = ensureTwilioConfigured(mode);
+    if (twilioError) return res.status(400).json({ error: twilioError });
+
+    const result = await pool.query(
+      `
+      SELECT id, shelter_name, intake_phone, city, state
+      FROM shelters
+      WHERE id = ANY($1::int[])
+      `,
+      [shelterIds]
+    );
+    const targets: ShelterCallTarget[] = result.rows;
+    if (targets.length === 0) {
+      return res.status(404).json({ error: "No shelters found for provided IDs." });
+    }
+
+    const job = callJobs.createJob({
+      mode,
+      survivor_context: survivorContext,
+      callback_number: callbackNumber,
+      targets,
+    });
+
+    for (const attempt of job.attempts) {
+      if (!attempt.to_phone) {
+        callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+          status: "failed",
+          error: "Shelter does not have intake_phone configured.",
+        });
+        continue;
+      }
+
+      if (mode === "dry_run") {
+        callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+          status: "completed",
+          provider_call_sid: `DRYRUN-${attempt.attempt_id}`,
+        });
+        continue;
+      }
+
+      try {
+        const twiml = buildShelterIntakeTwiml({
+          shelterName: attempt.shelter_name,
+          survivorContext,
+          callbackNumber,
+        });
+        const { sid } = await createTwilioCall(twilioConfig, {
+          to: attempt.to_phone,
+          twiml,
+        });
+        callJobs.bindProviderSid(job.job_id, attempt.attempt_id, sid);
+        callJobs.markAttempt(job.job_id, attempt.attempt_id, { status: "initiated" });
+      } catch (error) {
+        callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+          status: "failed",
+          error: error instanceof Error ? error.message : "Unknown Twilio error",
+        });
+      }
+    }
+
+    const fresh = callJobs.getJob(job.job_id);
+    return res.status(201).json({
+      success: true,
+      message: mode === "dry_run" ? "Dry-run call job simulated." : "Live call job initiated.",
+      job: fresh,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to create call job",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+app.get("/api/calls/jobs", (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    count: callJobs.listJobs().length,
+    jobs: callJobs.listJobs(),
+  });
+});
+
+app.get("/api/calls/jobs/:job_id", (req: Request, res: Response) => {
+  const job = callJobs.getJob(req.params.job_id);
+  if (!job) {
+    return res.status(404).json({ error: "Call job not found." });
+  }
+  return res.json({ success: true, job });
+});
+
+app.post("/webhooks/twilio/status", (req: Request, res: Response) => {
+  const sid = String(req.body.CallSid || "");
+  const status = String(req.body.CallStatus || "");
+  if (!sid) return res.status(400).send("Missing CallSid");
+
+  const linked = callJobs.findByProviderSid(sid);
+  if (!linked) return res.status(200).send("OK");
+
+  callJobs.markAttempt(linked.job.job_id, linked.attempt.attempt_id, {
+    status: mapTwilioStatus(status),
+  });
+  return res.status(200).send("OK");
+});
+
+app.post("/webhooks/twilio/transcript", (req: Request, res: Response) => {
+  const sid = String(req.body.CallSid || req.body.call_sid || "");
+  const transcript = String(req.body.TranscriptText || req.body.transcript || "");
+  if (!sid) return res.status(400).json({ error: "Missing CallSid" });
+
+  const linked = callJobs.findByProviderSid(sid);
+  if (!linked) return res.status(200).json({ success: true, ignored: true });
+
+  callJobs.markAttempt(linked.job.job_id, linked.attempt.attempt_id, {
+    transcript_excerpt: transcript.slice(0, 500),
+  });
+  return res.status(200).json({ success: true });
+});
+
 app.listen(port, () => {
   console.log(`Eden shelter API running on http://localhost:${port}`);
   console.log(`Nearest shelters: http://localhost:${port}/api/shelters/nearest?lat=37.7749&lon=-122.4194`);
+  console.log(`Call mode: ${defaultCallMode}`);
 });
 
 process.on("SIGTERM", async () => {
