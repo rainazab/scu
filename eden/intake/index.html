@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Eden Intake</title>
+    <style>
+      :root {
+        --bg: #f4f8ff;
+        --card: #ffffff;
+        --text: #14213d;
+        --muted: #5e6b85;
+        --primary: #2f6fff;
+        --primary-soft: #eaf1ff;
+        --ok: #1f9d5b;
+        --warn: #d97706;
+        --bad: #c0392b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      .app {
+        max-width: 480px;
+        margin: 0 auto;
+        min-height: 100vh;
+        padding: 16px;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .lang {
+        border: 1px solid #cad9ff;
+        background: #fff;
+        color: var(--primary);
+        border-radius: 999px;
+        min-height: 40px;
+        padding: 0 14px;
+        font-weight: 600;
+      }
+      .card {
+        background: var(--card);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 8px 24px rgba(26, 45, 91, 0.08);
+      }
+      .progress { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+      h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.2; }
+      h2 { margin: 0 0 12px; font-size: 20px; }
+      p { margin: 0 0 12px; color: var(--muted); }
+      .chips {
+        display: grid;
+        gap: 10px;
+      }
+      .chip {
+        border: 1px solid #cfdcff;
+        background: #fff;
+        min-height: 48px;
+        border-radius: 12px;
+        padding: 10px 12px;
+        text-align: left;
+        font-size: 16px;
+      }
+      .chip.active {
+        background: var(--primary-soft);
+        border-color: var(--primary);
+        color: var(--primary);
+        font-weight: 600;
+      }
+      label { display: block; margin: 12px 0 6px; font-weight: 600; }
+      input, textarea {
+        width: 100%;
+        border: 1px solid #cfd8ea;
+        border-radius: 12px;
+        min-height: 48px;
+        padding: 10px 12px;
+        font-size: 16px;
+      }
+      textarea { min-height: 88px; resize: vertical; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .yn {
+        border: 1px solid #cfdcff;
+        background: #fff;
+        min-height: 48px;
+        border-radius: 12px;
+      }
+      .yn.active { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+      .stepper { display: flex; align-items: center; gap: 12px; }
+      .stepper button {
+        min-height: 48px;
+        min-width: 56px;
+        border: 1px solid #cfdcff;
+        background: #fff;
+        border-radius: 12px;
+        font-size: 20px;
+      }
+      .actions { margin-top: 16px; display: flex; gap: 10px; }
+      .btn {
+        border: none;
+        border-radius: 12px;
+        min-height: 52px;
+        padding: 0 16px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .btn.secondary { background: #eef2f8; color: #334155; }
+      .btn.primary { background: var(--primary); color: #fff; flex: 1; }
+      .status {
+        text-align: center;
+        padding-top: 20px;
+      }
+      .pulse {
+        width: 84px;
+        height: 84px;
+        margin: 0 auto 14px;
+        border-radius: 50%;
+        background: var(--primary-soft);
+        border: 2px solid var(--primary);
+        animation: pulse 1.6s infinite ease-in-out;
+      }
+      @keyframes pulse {
+        0% { transform: scale(0.95); opacity: 0.8; }
+        70% { transform: scale(1.06); opacity: 1; }
+        100% { transform: scale(0.95); opacity: 0.8; }
+      }
+      .log {
+        margin-top: 14px;
+        text-align: left;
+        max-height: 240px;
+        overflow: auto;
+        background: #f8faff;
+        border: 1px solid #e0e8f8;
+        border-radius: 12px;
+        padding: 10px;
+      }
+      .log-item { padding: 8px; border-bottom: 1px solid #ebf1ff; font-size: 14px; }
+      .tag { font-weight: 700; }
+      .tag.calling { color: var(--warn); }
+      .tag.failed { color: var(--bad); }
+      .tag.done { color: var(--ok); }
+      .result-box {
+        margin-top: 16px;
+        text-align: left;
+        background: #effbf4;
+        border: 1px solid #b9e8cb;
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .hide { display: none; }
+      .small { font-size: 13px; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="top">
+        <strong>Eden</strong>
+        <button id="langBtn" class="lang">Español</button>
+      </div>
+      <div class="card" id="wizard">
+        <div class="progress" id="progress">Step 1 of 3</div>
+        <div id="step1">
+          <h2 id="s1title">What do you need?</h2>
+          <div class="chips" id="needChips"></div>
+        </div>
+        <div id="step2" class="hide">
+          <h2 id="s2title">About your situation</h2>
+          <label id="peopleLabel">How many people need help?</label>
+          <div class="stepper">
+            <button id="minus">-</button>
+            <div id="peopleCount">1</div>
+            <button id="plus">+</button>
+          </div>
+          <label id="childrenLabel">Do you have children with you?</label>
+          <div class="row">
+            <button class="yn" data-field="children" data-val="true" id="childrenYes">Yes</button>
+            <button class="yn" data-field="children" data-val="false" id="childrenNo">No</button>
+          </div>
+          <label id="petsLabel">Do you have pets?</label>
+          <div class="row">
+            <button class="yn" data-field="pets" data-val="true" id="petsYes">Yes</button>
+            <button class="yn" data-field="pets" data-val="false" id="petsNo">No</button>
+          </div>
+          <label id="locLabel">What city or neighborhood are you in?</label>
+          <input id="location" placeholder="e.g. Mission District, SF" />
+          <label id="notesLabel">Anything urgent we should know? (optional)</label>
+          <textarea id="notes" maxlength="200" placeholder="e.g. I need wheelchair access"></textarea>
+        </div>
+        <div id="step3" class="hide">
+          <h2 id="s3title">How do we reach you?</h2>
+          <label id="phoneLabel">What number can we text results to?</label>
+          <input id="phone" type="tel" placeholder="+1 (415) 555-0199" />
+          <p class="small" id="privacyNote">We only use this to text you results. We don't store your name.</p>
+        </div>
+        <div class="actions">
+          <button id="backBtn" class="btn secondary hide">Back</button>
+          <button id="nextBtn" class="btn primary">Next</button>
+        </div>
+      </div>
+
+      <div id="statusView" class="card status hide">
+        <div class="pulse"></div>
+        <h2 id="statusTitle">Your agent is calling shelters now...</h2>
+        <p id="statusSub">Please stay on this screen while we check availability.</p>
+        <div class="log" id="log"></div>
+        <div id="result" class="result-box hide"></div>
+      </div>
+    </div>
+
+    <script>
+      const API = "http://localhost:3000";
+      let step = 1;
+      let pollTimer = null;
+      let jobId = null;
+      let lang = "en";
+
+      const state = {
+        needs: [],
+        people_count: 1,
+        has_children: false,
+        has_pets: false,
+        location: "",
+        notes: "",
+        callback_number: "",
+      };
+
+      const labels = {
+        en: {
+          step: (n) => `Step ${n} of 3`,
+          next: "Next",
+          back: "Back",
+          submit: "Find Help Now →",
+          s1title: "What do you need?",
+          s2title: "About your situation",
+          s3title: "How do we reach you?",
+          peopleLabel: "How many people need help?",
+          childrenLabel: "Do you have children with you?",
+          petsLabel: "Do you have pets?",
+          locLabel: "What city or neighborhood are you in?",
+          notesLabel: "Anything urgent we should know? (optional)",
+          phoneLabel: "What number can we text results to?",
+          privacyNote: "We only use this to text you results. We don't store your name.",
+          statusTitle: "Your agent is calling shelters now...",
+          statusSub: "Please stay on this screen while we check availability.",
+          noBeds: (n) => `We tried ${n} shelters. No beds tonight. Call 211 for free 24/7 help.`,
+          found: "They're expecting you. A text has been sent.",
+          yes: "Yes",
+          no: "No",
+          chips: [
+            ["shelter", "🏠 A place to sleep tonight"],
+            ["food", "🍽️ Food right now"],
+            ["medical", "🏥 Medical help"],
+            ["mental_health", "🧠 Mental health support"],
+            ["children_support", "👨‍👩‍👧 Help with children"],
+            ["other", "📋 Other"],
+          ],
+        },
+        es: {
+          step: (n) => `Paso ${n} de 3`,
+          next: "Siguiente",
+          back: "Atrás",
+          submit: "Buscar ayuda ahora →",
+          s1title: "¿Qué necesitas?",
+          s2title: "Sobre tu situación",
+          s3title: "¿Cómo te contactamos?",
+          peopleLabel: "¿Cuántas personas necesitan ayuda?",
+          childrenLabel: "¿Tienes niños contigo?",
+          petsLabel: "¿Tienes mascotas?",
+          locLabel: "¿En qué ciudad o vecindario estás?",
+          notesLabel: "¿Algo urgente que debamos saber? (opcional)",
+          phoneLabel: "¿A qué número te enviamos resultados por SMS?",
+          privacyNote: "Solo usamos este número para enviarte resultados. No guardamos tu nombre.",
+          statusTitle: "Tu agente está llamando refugios ahora...",
+          statusSub: "Quédate en esta pantalla mientras verificamos disponibilidad.",
+          noBeds: (n) => `Intentamos ${n} refugios. No hay camas esta noche. Llama al 211.`,
+          found: "Te están esperando. Se envió un mensaje de texto.",
+          yes: "Sí",
+          no: "No",
+          chips: [
+            ["shelter", "🏠 Un lugar para dormir esta noche"],
+            ["food", "🍽️ Comida ahora"],
+            ["medical", "🏥 Ayuda médica"],
+            ["mental_health", "🧠 Salud mental"],
+            ["children_support", "👨‍👩‍👧 Ayuda con niños"],
+            ["other", "📋 Otro"],
+          ],
+        },
+      };
+
+      const needChips = document.getElementById("needChips");
+      function renderChips() {
+        needChips.innerHTML = "";
+        labels[lang].chips.forEach(([key, text]) => {
+          const btn = document.createElement("button");
+          btn.className = "chip" + (state.needs.includes(key) ? " active" : "");
+          btn.textContent = text;
+          btn.onclick = () => {
+            if (state.needs.includes(key)) state.needs = state.needs.filter((n) => n !== key);
+            else state.needs.push(key);
+            renderChips();
+          };
+          needChips.appendChild(btn);
+        });
+      }
+
+      function syncLabels() {
+        document.getElementById("progress").textContent = labels[lang].step(step);
+        document.getElementById("s1title").textContent = labels[lang].s1title;
+        document.getElementById("s2title").textContent = labels[lang].s2title;
+        document.getElementById("s3title").textContent = labels[lang].s3title;
+        document.getElementById("peopleLabel").textContent = labels[lang].peopleLabel;
+        document.getElementById("childrenLabel").textContent = labels[lang].childrenLabel;
+        document.getElementById("petsLabel").textContent = labels[lang].petsLabel;
+        document.getElementById("locLabel").textContent = labels[lang].locLabel;
+        document.getElementById("notesLabel").textContent = labels[lang].notesLabel;
+        document.getElementById("phoneLabel").textContent = labels[lang].phoneLabel;
+        document.getElementById("privacyNote").textContent = labels[lang].privacyNote;
+        document.getElementById("statusTitle").textContent = labels[lang].statusTitle;
+        document.getElementById("statusSub").textContent = labels[lang].statusSub;
+        document.getElementById("nextBtn").textContent = step === 3 ? labels[lang].submit : labels[lang].next;
+        document.getElementById("backBtn").textContent = labels[lang].back;
+        document.getElementById("childrenYes").textContent = labels[lang].yes;
+        document.getElementById("childrenNo").textContent = labels[lang].no;
+        document.getElementById("petsYes").textContent = labels[lang].yes;
+        document.getElementById("petsNo").textContent = labels[lang].no;
+        renderChips();
+      }
+
+      function setStep(n) {
+        step = n;
+        document.getElementById("step1").classList.toggle("hide", step !== 1);
+        document.getElementById("step2").classList.toggle("hide", step !== 2);
+        document.getElementById("step3").classList.toggle("hide", step !== 3);
+        document.getElementById("backBtn").classList.toggle("hide", step === 1);
+        syncLabels();
+      }
+
+      document.getElementById("langBtn").onclick = () => {
+        lang = lang === "en" ? "es" : "en";
+        document.getElementById("langBtn").textContent = lang === "en" ? "Español" : "English";
+        syncLabels();
+      };
+
+      document.getElementById("minus").onclick = () => {
+        state.people_count = Math.max(1, state.people_count - 1);
+        document.getElementById("peopleCount").textContent = String(state.people_count);
+      };
+      document.getElementById("plus").onclick = () => {
+        state.people_count = Math.min(5, state.people_count + 1);
+        document.getElementById("peopleCount").textContent = state.people_count === 5 ? "5+" : String(state.people_count);
+      };
+
+      document.querySelectorAll(".yn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const field = btn.dataset.field;
+          const val = btn.dataset.val === "true";
+          if (field === "children") {
+            state.has_children = val;
+            document.getElementById("childrenYes").classList.toggle("active", val);
+            document.getElementById("childrenNo").classList.toggle("active", !val);
+          }
+          if (field === "pets") {
+            state.has_pets = val;
+            document.getElementById("petsYes").classList.toggle("active", val);
+            document.getElementById("petsNo").classList.toggle("active", !val);
+          }
+        });
+      });
+
+      document.getElementById("backBtn").onclick = () => setStep(Math.max(1, step - 1));
+      document.getElementById("nextBtn").onclick = async () => {
+        if (step < 3) return setStep(step + 1);
+        state.location = document.getElementById("location").value.trim();
+        state.notes = document.getElementById("notes").value.trim();
+        state.callback_number = document.getElementById("phone").value.trim();
+        if (!state.callback_number || !state.location || state.needs.length === 0) {
+          alert("Please fill needs, location, and callback number.");
+          return;
+        }
+        await submitIntake();
+      };
+
+      async function submitIntake() {
+        const res = await fetch(`${API}/api/intake`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(state),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || "Failed to start intake.");
+          return;
+        }
+        jobId = data.job_id;
+        document.getElementById("wizard").classList.add("hide");
+        document.getElementById("statusView").classList.remove("hide");
+        pollTimer = setInterval(loadStatus, 3000);
+        loadStatus();
+      }
+
+      async function loadStatus() {
+        if (!jobId) return;
+        const res = await fetch(`${API}/api/intake/status/${jobId}`);
+        const data = await res.json();
+        if (!res.ok) return;
+        const log = document.getElementById("log");
+        log.innerHTML = "";
+        data.attempts.forEach((a) => {
+          const row = document.createElement("div");
+          row.className = "log-item";
+          const cls = a.status === "calling" ? "calling" : a.status === "failed" ? "failed" : a.status === "completed" ? "done" : "";
+          row.innerHTML = `<strong>${a.shelter_name}</strong><br><span class="tag ${cls}">${a.status}</span>${a.reason ? ` - ${a.reason}` : ""}`;
+          log.appendChild(row);
+        });
+
+        if (data.result) {
+          clearInterval(pollTimer);
+          const box = document.getElementById("result");
+          box.classList.remove("hide");
+          box.innerHTML = `
+            <h3 style="margin:0 0 8px;color:#1f9d5b;">✅ Help Found</h3>
+            <p><strong>${data.result.shelter_name}</strong><br>${data.result.address || ""} ${data.result.city || ""}<br>${data.result.intake_phone || ""}</p>
+            <p>${labels[lang].found} ${state.callback_number}</p>
+          `;
+        } else if (data.status === "failed") {
+          clearInterval(pollTimer);
+          const box = document.getElementById("result");
+          box.classList.remove("hide");
+          box.innerHTML = `<h3 style="margin:0 0 8px;color:#d97706;">⚠️ No Immediate Bed</h3><p>${labels[lang].noBeds(data.attempts.length)}</p>`;
+        }
+      }
+
+      setStep(1);
+      syncLabels();
+      renderChips();
+    </script>
+  </body>
+</html>

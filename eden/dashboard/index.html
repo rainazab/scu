@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Eden Mission Control</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --card: #121933;
+        --text: #d6ddf5;
+        --muted: #8fa0d0;
+        --ok: #22c55e;
+        --warn: #f59e0b;
+        --bad: #ef4444;
+        --line: #263158;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      }
+      .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+      h1 { margin: 0 0 12px; font-size: 24px; }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .stat {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+      }
+      .stat .k { color: var(--muted); font-size: 12px; }
+      .stat .v { font-size: 24px; font-weight: 700; }
+      .grid {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 12px;
+      }
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        min-height: 180px;
+      }
+      .feed {
+        max-height: 420px;
+        overflow: auto;
+        font-size: 13px;
+      }
+      .item {
+        border-bottom: 1px solid #1d2749;
+        padding: 8px 2px;
+      }
+      .badge {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .queued { background: #334155; }
+      .calling { background: #92400e; }
+      .found { background: #14532d; }
+      .failed { background: #7f1d1d; }
+      .time { color: var(--muted); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Eden Mission Control</h1>
+      <div class="stats">
+        <div class="stat"><div class="k">Total Shelters in DB</div><div class="v" id="shelters">0</div></div>
+        <div class="stat"><div class="k">Calls Made</div><div class="v" id="calls">0</div></div>
+        <div class="stat"><div class="k">Beds Found</div><div class="v" id="beds">0</div></div>
+        <div class="stat"><div class="k">Active Transfers</div><div class="v" id="transfers">0</div></div>
+      </div>
+      <div class="grid">
+        <div class="panel">
+          <h3>Live Call Feed</h3>
+          <div id="feed" class="feed"></div>
+        </div>
+        <div>
+          <div class="panel" style="margin-bottom:12px;">
+            <h3>Recent Escalations</h3>
+            <div id="escalations" class="feed"></div>
+          </div>
+          <div class="panel">
+            <h3>Warm Transfers</h3>
+            <div id="warm" class="feed"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      const API = "http://localhost:3000";
+      function badgeFor(status) {
+        if (status === "completed") return `<span class="badge found">✅ found</span>`;
+        if (status === "initiated") return `<span class="badge calling">calling</span>`;
+        if (status === "failed") return `<span class="badge failed">failed</span>`;
+        return `<span class="badge queued">queued</span>`;
+      }
+      async function refreshOverview() {
+        const res = await fetch(`${API}/api/dashboard/overview`);
+        const d = await res.json();
+        if (!res.ok) return;
+        document.getElementById("shelters").textContent = d.top_stats?.total_shelters_in_db ?? d.shelters?.total ?? 0;
+        document.getElementById("calls").textContent = d.top_stats?.calls_made ?? 0;
+        document.getElementById("beds").textContent = d.top_stats?.beds_found ?? 0;
+        document.getElementById("transfers").textContent = d.top_stats?.active_transfers ?? 0;
+      }
+      async function refreshActivity() {
+        const res = await fetch(`${API}/api/dashboard/activity`);
+        const d = await res.json();
+        if (!res.ok) return;
+        const feed = document.getElementById("feed");
+        feed.innerHTML = "";
+        (d.recent_call_attempts || []).forEach((a) => {
+          const el = document.createElement("div");
+          el.className = "item";
+          el.innerHTML = `<div><strong>${a.shelter_name}</strong> ${badgeFor(a.status)}</div><div class="time">${a.updated_at}</div>`;
+          feed.appendChild(el);
+        });
+        const esc = document.getElementById("escalations");
+        esc.innerHTML = "";
+        (d.recent_escalations || []).forEach((e) => {
+          const el = document.createElement("div");
+          el.className = "item";
+          el.innerHTML = `<div><strong>${e.source}</strong> - ${e.reason}</div><div class="time">${e.created_at}</div>`;
+          esc.appendChild(el);
+        });
+        const warm = document.getElementById("warm");
+        warm.innerHTML = "";
+        (d.recent_warm_transfers || []).forEach((t) => {
+          const el = document.createElement("div");
+          el.className = "item";
+          el.innerHTML = `<div><strong>${t.shelter_name}</strong> <span class="badge ${t.status === "failed" ? "failed" : t.status === "bridged" ? "found" : "calling"}">${t.status}</span></div><div class="time">${t.updated_at}</div>`;
+          warm.appendChild(el);
+        });
+      }
+      async function refresh() {
+        await Promise.all([refreshOverview(), refreshActivity()]);
+      }
+      refresh();
+      setInterval(refresh, 5000);
+    </script>
+  </body>
+</html>

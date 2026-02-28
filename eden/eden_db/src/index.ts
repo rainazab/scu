@@ -199,6 +199,170 @@ function recordEscalationAndPersist(input: {
   return escalation;
 }
 
+async function queryNearestShelters(params: {
+  lat: number;
+  lon: number;
+  limit: number;
+  needs: IntakeNeed[];
+  has_children: boolean;
+}): Promise<
+  Array<{
+    id: number;
+    shelter_name: string;
+    intake_phone: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    accepts_children: boolean;
+    accepts_pets: boolean;
+    distance_meters: number;
+  }>
+> {
+  const primaryNeed = params.needs[0] || "shelter";
+  const values: Array<string | number | boolean> = [params.lon, params.lat];
+  let where = "WHERE coordinates IS NOT NULL";
+
+  if (params.has_children) {
+    values.push(true);
+    where += ` AND accepts_children = $${values.length}`;
+  }
+
+  if (primaryNeed !== "shelter" && primaryNeed !== "children_support") {
+    values.push(`%${primaryNeed.replace("_", " ")}%`);
+    where += ` AND (description ILIKE $${values.length} OR shelter_name ILIKE $${values.length})`;
+  }
+
+  values.push(Math.max(1, Math.min(params.limit, 20)));
+
+  const result = await pool.query(
+    `
+    SELECT
+      id, shelter_name, intake_phone, address, city, state,
+      accepts_children, accepts_pets,
+      ST_Distance(coordinates, ST_GeogFromText('POINT($1 $2)')) AS distance_meters
+    FROM shelters
+    ${where}
+    ORDER BY distance_meters ASC
+    LIMIT $${values.length}
+    `,
+    values
+  );
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    shelter_name: String(row.shelter_name),
+    intake_phone: row.intake_phone ? String(row.intake_phone) : null,
+    address: row.address ? String(row.address) : null,
+    city: row.city ? String(row.city) : null,
+    state: row.state ? String(row.state) : null,
+    accepts_children: Boolean(row.accepts_children),
+    accepts_pets: Boolean(row.accepts_pets),
+    distance_meters: Number(row.distance_meters || 0),
+  }));
+}
+
+function buildSurvivorContextFromIntake(input: {
+  needs: IntakeNeed[];
+  people_count: number;
+  has_children: boolean;
+  has_pets: boolean;
+  location: string;
+  notes?: string;
+}): string {
+  const needsText = input.needs.length ? input.needs.join(", ") : "shelter support";
+  return `Person in ${input.location} needs: ${needsText}. Group of ${input.people_count} people${
+    input.has_children ? " with children" : ""
+  }. ${input.has_pets ? "Has pets." : "No pets."}${input.notes ? ` Note: ${input.notes}.` : ""}`;
+}
+
+function toSimpleAttemptStatus(status: string): string {
+  if (status === "initiated") return "calling";
+  if (status === "completed") return "completed";
+  if (status === "failed") return "failed";
+  return "queued";
+}
+
+async function sendFoundSms(params: {
+  callback_number: string;
+  shelter_name: string;
+  address?: string | null;
+  city?: string | null;
+  phone?: string | null;
+  accepts_children?: boolean;
+  accepts_pets?: boolean;
+}): Promise<void> {
+  const lines = [
+    "✅ Eden found help for you:",
+    "",
+    `${params.shelter_name}`,
+    `📍 ${params.address || "Address shared by intake team"}, ${params.city || ""}`.trim(),
+    `📞 ${params.phone || "Call local intake line"}`,
+    "",
+  ];
+  if (params.accepts_children) lines.push("Children welcome ✓");
+  if (params.accepts_pets) lines.push("Pets welcome ✓");
+  lines.push("", "Please arrive soon — they're expecting you.", "", "Need more help? Reply HELP or call 211 (free, 24/7).");
+  const body = lines.join("\n");
+
+  if (dryRunMode) return;
+  await sendSms(twilioConfig, params.callback_number, body);
+}
+
+async function sendNoResultSms(params: {
+  callback_number: string;
+  count: number;
+  location: string;
+}): Promise<void> {
+  const body = `Eden searched ${params.count} shelters near ${params.location}.
+No beds available tonight.
+
+📞 Call 211 — free 24/7 social services
+📞 SF Hotline: (415) 255-0560
+
+Try again tomorrow morning — we'll keep searching.
+— Eden`;
+  if (dryRunMode) return;
+  await sendSms(twilioConfig, params.callback_number, body);
+}
+
+function applyDemoProgress(jobId: string): void {
+  if (!dryRunMode) return;
+  const tracker = intakeTrackers.get(jobId);
+  if (!tracker) return;
+  const job = callJobs.getJob(jobId);
+  if (!job) return;
+
+  const elapsedMs = Date.now() - tracker.created_at_ms;
+  const attempts = job.attempts;
+  if (attempts.length === 0) return;
+
+  const first = attempts[0];
+  const second = attempts[1];
+  const third = attempts[2];
+
+  if (first && elapsedMs >= 2000 && first.status === "queued") {
+    callJobs.markAttempt(jobId, first.attempt_id, { status: "failed", error: "no beds" });
+    persistCallJobState(jobId);
+  }
+  if (second && elapsedMs >= 4000 && second.status === "queued") {
+    callJobs.markAttempt(jobId, second.attempt_id, { status: "failed", error: "no beds" });
+    persistCallJobState(jobId);
+  }
+  if (third && elapsedMs >= 7000 && third.status === "queued") {
+    callJobs.markAttempt(jobId, third.attempt_id, {
+      status: "completed",
+      parsed_transcript: {
+        availability_status: "available",
+        reported_available_beds: 1,
+        intake_requirements: ["Photo ID"],
+        needs_human_followup: false,
+        summary: "Shelter confirmed one available bed.",
+      },
+    });
+    persistCallJobState(jobId);
+  }
+}
+
 app.get("/api/shelters/nearest", async (req: Request, res: Response) => {
   try {
     const { lat, lon, limit = "10", max_distance_miles } = req.query;
@@ -479,6 +643,8 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
         const { sid } = await createTwilioCall(twilioConfig, {
           to: attempt.to_phone,
           twiml,
+          record: enableCallRecording,
+          recordingCallbackUrl,
         });
         callJobs.bindProviderSid(job.job_id, attempt.attempt_id, sid);
         callJobs.markAttempt(job.job_id, attempt.attempt_id, { status: "initiated" });
@@ -565,6 +731,28 @@ app.post("/webhooks/twilio/status", (req: Request, res: Response) => {
   return res.status(200).send("OK");
 });
 
+app.post("/webhooks/twilio/recording", (req: Request, res: Response) => {
+  const sid = String(req.body.CallSid || "");
+  const recordingUrl = String(req.body.RecordingUrl || "");
+  const recordingDuration = String(req.body.RecordingDuration || "");
+  const recordingSid = String(req.body.RecordingSid || "");
+  if (!sid) return res.status(400).json({ error: "Missing CallSid" });
+
+  const linked = callJobs.findByProviderSid(sid);
+  if (!linked) return res.status(200).json({ success: true, ignored: true });
+
+  callJobs.markAttempt(linked.job.job_id, linked.attempt.attempt_id, {
+    recording_url: recordingUrl || undefined,
+    error:
+      linked.attempt.error ||
+      (recordingSid
+        ? `recording_sid=${recordingSid}${recordingDuration ? ` duration=${recordingDuration}s` : ""}`
+        : undefined),
+  });
+  persistCallJobState(linked.job.job_id);
+  return res.status(200).json({ success: true });
+});
+
 app.post("/webhooks/twilio/transcript", (req: Request, res: Response) => {
   const sid = String(req.body.CallSid || req.body.call_sid || "");
   const transcript = String(req.body.TranscriptText || req.body.transcript || "");
@@ -618,6 +806,249 @@ app.post("/api/calls/parse-transcript", async (req: Request, res: Response) => {
     source: parsed.source,
     parsed: parsed.parsed,
   });
+});
+
+app.post("/api/intake", async (req: Request, res: Response) => {
+  try {
+    const needs = (Array.isArray(req.body.needs) ? req.body.needs : [])
+      .map((x: unknown) => String(x))
+      .filter((x) => x.length > 0) as IntakeNeed[];
+    const peopleCount = Number(req.body.people_count || 1);
+    const hasChildren = Boolean(req.body.has_children);
+    const hasPets = Boolean(req.body.has_pets);
+    const location = String(req.body.location || "").trim();
+    const notes = req.body.notes ? String(req.body.notes) : "";
+    const callbackNumber = String(req.body.callback_number || "").trim();
+
+    if (!location || !callbackNumber) {
+      return res.status(400).json({ error: "location and callback_number are required." });
+    }
+    if (safetyControls.isBlockedNumber(callbackNumber)) {
+      return res.status(403).json({ error: "callback_number is blocked by no-call-back safety policy." });
+    }
+
+    // Approximate coordinates for Bay Area demo; fallback to SF.
+    const cityToCoords: Record<string, { lat: number; lon: number }> = {
+      "san francisco": { lat: 37.7749, lon: -122.4194 },
+      "mission district": { lat: 37.7599, lon: -122.4148 },
+      "soma": { lat: 37.7786, lon: -122.4059 },
+      oakland: { lat: 37.8044, lon: -122.2711 },
+      "san jose": { lat: 37.3382, lon: -121.8863 },
+      berkeley: { lat: 37.8715, lon: -122.273 },
+      fremont: { lat: 37.5483, lon: -121.9886 },
+      "santa clara": { lat: 37.3541, lon: -121.9552 },
+    };
+    const key = location.toLowerCase();
+    const matched = Object.keys(cityToCoords).find((k) => key.includes(k));
+    const { lat, lon } = matched ? cityToCoords[matched] : cityToCoords["san francisco"];
+
+    const survivorContextRaw = buildSurvivorContextFromIntake({
+      needs,
+      people_count: Number.isFinite(peopleCount) ? Math.max(1, peopleCount) : 1,
+      has_children: hasChildren,
+      has_pets: hasPets,
+      location,
+      notes,
+    });
+    const risk = safetyControls.assessRisk(survivorContextRaw);
+    if (defaultCallMode === "live" && safetyControls.shouldBlockLiveAction(risk, false)) {
+      const escalation = recordEscalationAndPersist({
+        source: "call_job",
+        reference_id: "intake-live-blocked",
+        reason: "High-risk intake blocked from live mode without escalation approval.",
+        details: `Matched keywords: ${risk.matched_keywords.join(", ")}`,
+      });
+      return res.status(409).json({ error: "Live intake blocked pending escalation.", risk, escalation });
+    }
+
+    const targets = await queryNearestShelters({
+      lat,
+      lon,
+      limit: 10,
+      needs,
+      has_children: hasChildren,
+    });
+    if (targets.length === 0) {
+      return res.status(404).json({ error: "No nearby resources found for intake." });
+    }
+
+    const callTargets: ShelterCallTarget[] = targets.map((t) => ({
+      id: t.id,
+      shelter_name: t.shelter_name,
+      intake_phone: t.intake_phone,
+      city: t.city,
+      state: t.state,
+    }));
+
+    const job = callJobs.createJob({
+      mode: defaultCallMode,
+      survivor_context: survivorContextRaw,
+      callback_number: callbackNumber,
+      anonymous_mode: false,
+      escalation_approved: false,
+      targets: callTargets,
+    });
+    persistCallJobState(job.job_id);
+
+    intakeTrackers.set(job.job_id, {
+      job_id: job.job_id,
+      created_at_ms: Date.now(),
+      callback_number: callbackNumber,
+      location,
+      has_children: hasChildren,
+      has_pets: hasPets,
+    });
+
+    if (!dryRunMode) {
+      for (const attempt of job.attempts) {
+        if (!attempt.to_phone) {
+          callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+            status: "failed",
+            error: "Shelter does not have intake_phone configured.",
+          });
+          persistCallJobState(job.job_id);
+          continue;
+        }
+        try {
+          const scriptResult = await generateCallScript({
+            shelterName: attempt.shelter_name,
+            survivorContext: survivorContextRaw,
+            callbackNumber,
+          });
+          callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+            generated_script: scriptResult.script,
+          });
+          const twiml = buildShelterIntakeTwiml({
+            shelterName: attempt.shelter_name,
+            survivorContext: survivorContextRaw,
+            callbackNumber,
+            scriptText: scriptResult.script,
+          });
+          const { sid } = await createTwilioCall(twilioConfig, {
+            to: attempt.to_phone,
+            twiml,
+            record: enableCallRecording,
+            recordingCallbackUrl,
+          });
+          callJobs.bindProviderSid(job.job_id, attempt.attempt_id, sid);
+          callJobs.markAttempt(job.job_id, attempt.attempt_id, { status: "initiated" });
+          persistCallJobState(job.job_id);
+        } catch (error) {
+          callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+            status: "failed",
+            error: error instanceof Error ? error.message : "Unknown Twilio error",
+          });
+          persistCallJobState(job.job_id);
+        }
+      }
+    }
+
+    return res.status(201).json({
+      job_id: job.job_id,
+      message: "Search started",
+      estimated_calls: job.attempts.length,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to start intake search",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+app.get("/api/intake/status/:job_id", async (req: Request, res: Response) => {
+  const job = callJobs.getJob(req.params.job_id);
+  if (!job) return res.status(404).json({ error: "Job not found." });
+
+  applyDemoProgress(job.job_id);
+  const refreshed = callJobs.getJob(job.job_id) || job;
+  const tracker = intakeTrackers.get(job.job_id);
+
+  let result: null | {
+    shelter_name: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    intake_phone?: string;
+    accepts_children?: boolean;
+    accepts_pets?: boolean;
+  } = null;
+
+  const availableAttempt = refreshed.attempts.find(
+    (a) => a.parsed_transcript?.availability_status === "available"
+  );
+
+  if (availableAttempt) {
+    const shelterResult = await pool.query(
+      `SELECT shelter_name, address, city, state, intake_phone, accepts_children, accepts_pets FROM shelters WHERE id = $1`,
+      [availableAttempt.shelter_id]
+    );
+    const row = shelterResult.rows[0];
+    if (row) {
+      result = {
+        shelter_name: String(row.shelter_name),
+        address: row.address ? String(row.address) : undefined,
+        city: row.city ? String(row.city) : undefined,
+        state: row.state ? String(row.state) : undefined,
+        intake_phone: row.intake_phone ? String(row.intake_phone) : undefined,
+        accepts_children: Boolean(row.accepts_children),
+        accepts_pets: Boolean(row.accepts_pets),
+      };
+    }
+
+    if (tracker?.callback_number && !tracker.sms_sent) {
+      try {
+        await sendFoundSms({
+          callback_number: tracker.callback_number,
+          shelter_name: result?.shelter_name || availableAttempt.shelter_name,
+          address: result?.address,
+          city: result?.city,
+          phone: result?.intake_phone,
+          accepts_children: result?.accepts_children,
+          accepts_pets: result?.accepts_pets,
+        });
+        tracker.sms_sent = true;
+      } catch (error) {
+        console.error("Failed to send found SMS", error);
+      }
+    }
+  } else {
+    const allDone = refreshed.attempts.length > 0 && refreshed.attempts.every((a) => a.status !== "queued");
+    if (allDone && tracker?.callback_number && !tracker.no_result_sms_sent) {
+      try {
+        await sendNoResultSms({
+          callback_number: tracker.callback_number,
+          count: refreshed.attempts.length,
+          location: tracker.location,
+        });
+        tracker.no_result_sms_sent = true;
+      } catch (error) {
+        console.error("Failed to send no-result SMS", error);
+      }
+    }
+  }
+
+  const attempts = refreshed.attempts.map((attempt) => ({
+    shelter_name: attempt.shelter_name,
+    status: toSimpleAttemptStatus(attempt.status),
+    reason:
+      attempt.parsed_transcript?.availability_status === "waitlist"
+        ? "no beds"
+        : attempt.error || undefined,
+  }));
+
+  return res.json({
+    status: result ? "completed" : refreshed.status,
+    attempts,
+    result,
+  });
+});
+
+app.post("/api/demo/reset", (_req: Request, res: Response) => {
+  callJobs.reset();
+  warmTransfers.reset();
+  intakeTrackers.clear();
+  return res.json({ success: true, message: "Demo state reset." });
 });
 
 app.post("/api/warm-transfers", async (req: Request, res: Response) => {
@@ -809,6 +1240,12 @@ app.get("/api/dashboard/overview", async (_req: Request, res: Response) => {
     const response = {
       success: true,
       generated_at: new Date().toISOString(),
+      top_stats: {
+        total_shelters_in_db: shelterCount,
+        calls_made: attempts.filter((a) => a.status !== "queued").length,
+        beds_found: parsedAvailability.available,
+        active_transfers: transfers.filter((t) => t.status === "connecting" || t.status === "bridged").length,
+      },
       shelters: {
         total: shelterCount,
       },
@@ -854,8 +1291,21 @@ app.get("/api/dashboard/activity", (_req: Request, res: Response) => {
   const jobs = callJobs.listJobs().slice(0, 10);
   const transfers = warmTransfers.listSessions().slice(0, 10);
   const escalations = safetyControls.listEscalations(10);
+  const recentAttempts = callJobs
+    .listJobs()
+    .flatMap((job) =>
+      job.attempts.map((attempt) => ({
+        job_id: job.job_id,
+        shelter_name: attempt.shelter_name,
+        status: attempt.status,
+        updated_at: attempt.updated_at,
+      }))
+    )
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, 50);
   return res.json({
     success: true,
+    recent_call_attempts: recentAttempts,
     recent_call_jobs: jobs,
     recent_warm_transfers: transfers,
     recent_escalations: escalations,
