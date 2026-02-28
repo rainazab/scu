@@ -9,6 +9,8 @@ export interface CreateCallInput {
   to: string;
   twiml: string;
   statusCallbackUrl?: string;
+  record?: boolean;
+  recordingCallbackUrl?: string;
 }
 
 export async function createTwilioCall(
@@ -28,6 +30,14 @@ export async function createTwilioCall(
     form.append("StatusCallbackEvent", "ringing");
     form.append("StatusCallbackEvent", "answered");
     form.append("StatusCallbackEvent", "completed");
+  }
+  if (input.record) {
+    form.append("Record", "true");
+    form.append("RecordingChannels", "dual");
+    if (input.recordingCallbackUrl) {
+      form.append("RecordingStatusCallback", input.recordingCallbackUrl);
+      form.append("RecordingStatusCallbackMethod", "POST");
+    }
   }
 
   const auth = Buffer.from(`${config.accountSid}:${config.authToken}`).toString("base64");
@@ -49,6 +59,34 @@ export async function createTwilioCall(
   if (!json.sid) {
     throw new Error("Twilio response did not include call SID");
   }
+  return { sid: json.sid };
+}
+
+export async function sendSms(
+  config: TwilioConfig,
+  to: string,
+  body: string
+): Promise<{ sid: string }> {
+  const endpoint = `https://api.twilio.com/2010-04-01/Accounts/${config.accountSid}/Messages.json`;
+  const form = new URLSearchParams();
+  form.append("To", to);
+  form.append("From", config.fromNumber);
+  form.append("Body", body);
+
+  const auth = Buffer.from(`${config.accountSid}:${config.authToken}`).toString("base64");
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: form.toString(),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Twilio SMS failed (${response.status}): ${text}`);
+  }
+  const json = (await response.json()) as { sid: string };
   return { sid: json.sid };
 }
 

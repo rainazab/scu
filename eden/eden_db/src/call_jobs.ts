@@ -20,6 +20,7 @@ export interface CallAttempt {
   status: CallAttemptStatus;
   generated_script?: string;
   provider_call_sid?: string;
+  recording_url?: string;
   error?: string;
   transcript_excerpt?: string;
   parsed_transcript?: {
@@ -122,6 +123,11 @@ export class CallJobStore {
     const attempt = job.attempts.find((a) => a.attempt_id === pointer.attempt_id);
     if (!attempt) return undefined;
     return { job, attempt };
+  }
+
+  reset(): void {
+    this.jobs.clear();
+    this.sidToAttempt.clear();
   }
 
   private recomputeJobStatus(job: CallJob): void {

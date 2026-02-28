@@ -3,7 +3,13 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { Pool } from "pg";
 import { CallJobStore, CallMode, ShelterCallTarget } from "./call_jobs";
-import { buildConferenceJoinTwiml, buildShelterIntakeTwiml, createTwilioCall, TwilioConfig } from "./twilio_client";
+import {
+  buildConferenceJoinTwiml,
+  buildShelterIntakeTwiml,
+  createTwilioCall,
+  sendSms,
+  TwilioConfig,
+} from "./twilio_client";
 import { generateCallScript, parseTranscript } from "./ai_agent";
 import { WarmTransferMode, WarmTransferStore } from "./warm_transfer";
 import { SafetyControls } from "./safety_controls";
@@ -30,6 +36,26 @@ const twilioConfig: TwilioConfig = {
 };
 const warmTransferStatusCallbackUrl =
   process.env.TWILIO_WARM_TRANSFER_STATUS_CALLBACK_URL || twilioConfig.statusCallbackUrl;
+const enableCallRecording = process.env.ENABLE_CALL_RECORDING === "true";
+const recordingCallbackUrl = process.env.NGROK_URL
+  ? `${process.env.NGROK_URL.replace(/\/$/, "")}/webhooks/twilio/recording`
+  : undefined;
+const dryRunMode = defaultCallMode === "dry_run";
+
+type IntakeNeed = "shelter" | "food" | "medical" | "mental_health" | "children_support" | "other";
+
+interface IntakeTracker {
+  job_id: string;
+  created_at_ms: number;
+  callback_number?: string;
+  location: string;
+  has_children: boolean;
+  has_pets: boolean;
+  sms_sent?: boolean;
+  no_result_sms_sent?: boolean;
+}
+
+const intakeTrackers = new Map<string, IntakeTracker>();
 
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",

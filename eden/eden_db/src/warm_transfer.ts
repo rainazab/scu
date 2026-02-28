@@ -92,4 +92,9 @@ export class WarmTransferStore {
     if (!session) return undefined;
     return { session, leg: pointer.leg };
   }
+
+  reset(): void {
+    this.sessions.clear();
+    this.sidToTransfer.clear();
+  }
 }
