@@ -8,6 +8,7 @@ export interface TwilioConfig {
 export interface CreateCallInput {
   to: string;
   twiml: string;
+  statusCallbackUrl?: string;
 }
 
 export async function createTwilioCall(
@@ -19,8 +20,9 @@ export async function createTwilioCall(
   form.append("To", input.to);
   form.append("From", config.fromNumber);
   form.append("Twiml", input.twiml);
-  if (config.statusCallbackUrl) {
-    form.append("StatusCallback", config.statusCallbackUrl);
+  const callbackUrl = input.statusCallbackUrl || config.statusCallbackUrl;
+  if (callbackUrl) {
+    form.append("StatusCallback", callbackUrl);
     form.append("StatusCallbackMethod", "POST");
     form.append("StatusCallbackEvent", "initiated");
     form.append("StatusCallbackEvent", "ringing");
@@ -72,6 +74,17 @@ export function buildShelterIntakeTwiml(context: {
     `<Say voice="Polly.Joanna">We are calling ${context.shelterName} to ask about current intake capacity and requirements.</Say>`,
     `<Say voice="Polly.Joanna">Context: ${safeContext}.${callbackLine}</Say>`,
     `<Say voice="Polly.Joanna">Please connect us with intake staff or leave a voicemail instruction.</Say>`,
+    "</Response>",
+  ].join("");
+}
+
+export function buildConferenceJoinTwiml(conferenceName: string): string {
+  return [
+    "<Response>",
+    "<Say voice=\"Polly.Joanna\">Connecting you to an Eden assisted transfer line.</Say>",
+    "<Dial>",
+    `<Conference startConferenceOnEnter="true" endConferenceOnExit="false">${conferenceName}</Conference>`,
+    "</Dial>",
     "</Response>",
   ].join("");
 }

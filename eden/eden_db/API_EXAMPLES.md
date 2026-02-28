@@ -76,4 +76,32 @@ curl -X POST "http://localhost:3000/api/calls/parse-transcript" \
   }'
 ```
 
+## Start warm transfer (dry-run)
+```bash
+curl -X POST "http://localhost:3000/api/warm-transfers" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "dry_run",
+    "job_id": "<job_id>",
+    "attempt_id": "<attempt_id>",
+    "survivor_phone": "+14155550199",
+    "survivor_name": "Jane Doe"
+  }'
+```
+
+## List warm transfers
+```bash
+curl "http://localhost:3000/api/warm-transfers"
+```
+
+## Dashboard overview
+```bash
+curl "http://localhost:3000/api/dashboard/overview"
+```
+
+## Dashboard activity
+```bash
+curl "http://localhost:3000/api/dashboard/activity"
+```
+
 

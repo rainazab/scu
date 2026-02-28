@@ -23,10 +23,15 @@ This repo is being rebuilt from the original CalHacks code in short phases so ea
 - Added Twilio call-initiation skeleton with `dry_run` default
 - Added webhook endpoints for call status and transcript snippets
 
-## Phase 2B (current)
+## Phase 2B
 - Added AI/fallback call script generation for shelter outreach
 - Added transcript parsing into structured availability/intake fields
 - Added script preview and transcript parsing endpoints for fast iteration
 
+## Phase 3A (current)
+- Added warm transfer orchestration endpoints with dry-run/live support
+- Added Twilio conference-bridge skeleton for survivor+shelter connection
+- Added dashboard endpoints for shelter/call/transfer operations metrics
+
 ## Next Short Phases
-- **Phase 3A:** Warm transfer flow + status dashboard endpoints
+- **Phase 4A:** Safety controls (anonymous mode, no-call-back list, escalation policies)

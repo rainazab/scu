@@ -3,8 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { Pool } from "pg";
 import { CallJobStore, CallMode, ShelterCallTarget } from "./call_jobs";
-import { buildShelterIntakeTwiml, createTwilioCall, TwilioConfig } from "./twilio_client";
+import { buildConferenceJoinTwiml, buildShelterIntakeTwiml, createTwilioCall, TwilioConfig } from "./twilio_client";
 import { generateCallScript, parseTranscript } from "./ai_agent";
+import { WarmTransferMode, WarmTransferStore } from "./warm_transfer";
 
 dotenv.config();
 
@@ -16,6 +17,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const callJobs = new CallJobStore();
+const warmTransfers = new WarmTransferStore();
 const defaultCallMode: CallMode = process.env.EDEN_CALL_MODE === "live" ? "live" : "dry_run";
 const twilioConfig: TwilioConfig = {
   accountSid: process.env.TWILIO_ACCOUNT_SID || "",
@@ -23,6 +25,8 @@ const twilioConfig: TwilioConfig = {
   fromNumber: process.env.TWILIO_FROM_NUMBER || "",
   statusCallbackUrl: process.env.TWILIO_STATUS_CALLBACK_URL || undefined,
 };
+const warmTransferStatusCallbackUrl =
+  process.env.TWILIO_WARM_TRANSFER_STATUS_CALLBACK_URL || twilioConfig.statusCallbackUrl;
 
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
@@ -72,6 +76,11 @@ function ensureTwilioConfigured(mode: CallMode): string | null {
     return "Live mode requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER.";
   }
   return null;
+}
+
+function isTerminalCallStatus(status: string): boolean {
+  const normalized = status.toLowerCase();
+  return ["completed", "failed", "busy", "no-answer", "canceled"].includes(normalized);
 }
 
 app.get("/api/shelters/nearest", async (req: Request, res: Response) => {
@@ -428,6 +437,202 @@ app.post("/api/calls/parse-transcript", async (req: Request, res: Response) => {
     success: true,
     source: parsed.source,
     parsed: parsed.parsed,
+  });
+});
+
+app.post("/api/warm-transfers", async (req: Request, res: Response) => {
+  try {
+    const jobId = String(req.body.job_id || "").trim();
+    const attemptId = String(req.body.attempt_id || "").trim();
+    const survivorPhone = String(req.body.survivor_phone || "").trim();
+    const survivorName = req.body.survivor_name ? String(req.body.survivor_name) : undefined;
+    const notes = req.body.notes ? String(req.body.notes) : undefined;
+    const requestedMode = req.body.mode === "live" ? "live" : req.body.mode === "dry_run" ? "dry_run" : undefined;
+    const mode: WarmTransferMode = requestedMode || defaultCallMode;
+
+    if (!jobId || !attemptId || !survivorPhone) {
+      return res.status(400).json({
+        error: "job_id, attempt_id, and survivor_phone are required.",
+      });
+    }
+
+    const twilioError = ensureTwilioConfigured(mode);
+    if (twilioError) return res.status(400).json({ error: twilioError });
+
+    const job = callJobs.getJob(jobId);
+    if (!job) return res.status(404).json({ error: "Call job not found." });
+    const attempt = job.attempts.find((a) => a.attempt_id === attemptId);
+    if (!attempt) return res.status(404).json({ error: "Call attempt not found on this job." });
+    if (!attempt.to_phone) return res.status(400).json({ error: "Shelter attempt has no destination phone." });
+
+    const transfer = warmTransfers.createSession({
+      mode,
+      job_id: jobId,
+      attempt_id: attemptId,
+      shelter_name: attempt.shelter_name,
+      shelter_phone: attempt.to_phone,
+      survivor_phone: survivorPhone,
+      survivor_name: survivorName,
+      notes,
+    });
+
+    if (mode === "dry_run") {
+      warmTransfers.bindCallSid(transfer.transfer_id, "survivor", `DRYRUN-SURVIVOR-${transfer.transfer_id}`);
+      warmTransfers.bindCallSid(transfer.transfer_id, "shelter", `DRYRUN-SHELTER-${transfer.transfer_id}`);
+      warmTransfers.setStatus(transfer.transfer_id, "bridged");
+      return res.status(201).json({
+        success: true,
+        message: "Dry-run warm transfer simulated.",
+        transfer: warmTransfers.getSession(transfer.transfer_id),
+      });
+    }
+
+    const conferenceTwiml = buildConferenceJoinTwiml(transfer.conference_name);
+    warmTransfers.setStatus(transfer.transfer_id, "connecting");
+    try {
+      const [survivorCall, shelterCall] = await Promise.all([
+        createTwilioCall(twilioConfig, {
+          to: survivorPhone,
+          twiml: conferenceTwiml,
+          statusCallbackUrl: warmTransferStatusCallbackUrl,
+        }),
+        createTwilioCall(twilioConfig, {
+          to: attempt.to_phone,
+          twiml: conferenceTwiml,
+          statusCallbackUrl: warmTransferStatusCallbackUrl,
+        }),
+      ]);
+      warmTransfers.bindCallSid(transfer.transfer_id, "survivor", survivorCall.sid);
+      warmTransfers.bindCallSid(transfer.transfer_id, "shelter", shelterCall.sid);
+      warmTransfers.setStatus(transfer.transfer_id, "bridged");
+    } catch (error) {
+      warmTransfers.setStatus(transfer.transfer_id, "failed");
+      return res.status(502).json({
+        error: "Failed to initiate warm transfer",
+        message: error instanceof Error ? error.message : "Unknown Twilio error",
+        transfer: warmTransfers.getSession(transfer.transfer_id),
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Warm transfer initiated.",
+      transfer: warmTransfers.getSession(transfer.transfer_id),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to create warm transfer",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+app.get("/api/warm-transfers", (_req: Request, res: Response) => {
+  const transfers = warmTransfers.listSessions();
+  return res.json({
+    success: true,
+    count: transfers.length,
+    transfers,
+  });
+});
+
+app.get("/api/warm-transfers/:transfer_id", (req: Request, res: Response) => {
+  const transfer = warmTransfers.getSession(req.params.transfer_id);
+  if (!transfer) {
+    return res.status(404).json({ error: "Warm transfer not found." });
+  }
+  return res.json({ success: true, transfer });
+});
+
+app.post("/webhooks/twilio/warm-transfer-status", (req: Request, res: Response) => {
+  const sid = String(req.body.CallSid || "");
+  const status = String(req.body.CallStatus || "").toLowerCase();
+  if (!sid) return res.status(400).send("Missing CallSid");
+
+  const linked = warmTransfers.findBySid(sid);
+  if (!linked) return res.status(200).send("OK");
+
+  if (["answered", "in-progress"].includes(status)) {
+    warmTransfers.setStatus(linked.session.transfer_id, "bridged");
+  } else if (isTerminalCallStatus(status)) {
+    if (["failed", "busy", "no-answer", "canceled"].includes(status)) {
+      warmTransfers.setStatus(linked.session.transfer_id, "failed");
+    } else {
+      warmTransfers.setStatus(linked.session.transfer_id, "completed");
+    }
+  } else {
+    warmTransfers.setStatus(linked.session.transfer_id, "connecting");
+  }
+  return res.status(200).send("OK");
+});
+
+app.get("/api/dashboard/overview", async (_req: Request, res: Response) => {
+  try {
+    const shelterCountResult = await pool.query("SELECT COUNT(*) FROM shelters");
+    const shelterCount = Number(shelterCountResult.rows[0].count || 0);
+
+    const jobs = callJobs.listJobs();
+    const attempts = jobs.flatMap((j) => j.attempts);
+    const transfers = warmTransfers.listSessions();
+
+    const parsedAvailability = attempts.reduce(
+      (acc, attempt) => {
+        const status = attempt.parsed_transcript?.availability_status;
+        if (status === "available") acc.available += 1;
+        else if (status === "waitlist") acc.waitlist += 1;
+        else if (status === "unknown") acc.unknown += 1;
+        return acc;
+      },
+      { available: 0, waitlist: 0, unknown: 0 }
+    );
+
+    const response = {
+      success: true,
+      generated_at: new Date().toISOString(),
+      shelters: {
+        total: shelterCount,
+      },
+      call_jobs: {
+        total: jobs.length,
+        queued: jobs.filter((j) => j.status === "queued").length,
+        in_progress: jobs.filter((j) => j.status === "in_progress").length,
+        completed: jobs.filter((j) => j.status === "completed").length,
+        failed: jobs.filter((j) => j.status === "failed").length,
+      },
+      call_attempts: {
+        total: attempts.length,
+        queued: attempts.filter((a) => a.status === "queued").length,
+        initiated: attempts.filter((a) => a.status === "initiated").length,
+        completed: attempts.filter((a) => a.status === "completed").length,
+        failed: attempts.filter((a) => a.status === "failed").length,
+        parsed_outcomes: parsedAvailability,
+      },
+      warm_transfers: {
+        total: transfers.length,
+        queued: transfers.filter((t) => t.status === "queued").length,
+        connecting: transfers.filter((t) => t.status === "connecting").length,
+        bridged: transfers.filter((t) => t.status === "bridged").length,
+        completed: transfers.filter((t) => t.status === "completed").length,
+        failed: transfers.filter((t) => t.status === "failed").length,
+      },
+    };
+
+    return res.json(response);
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to build dashboard overview",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+app.get("/api/dashboard/activity", (_req: Request, res: Response) => {
+  const jobs = callJobs.listJobs().slice(0, 10);
+  const transfers = warmTransfers.listSessions().slice(0, 10);
+  return res.json({
+    success: true,
+    recent_call_jobs: jobs,
+    recent_warm_transfers: transfers,
   });
 });
 
