@@ -1,21 +1,21 @@
 #!/bin/bash
 
-# Pizza Finder API Server Management Script
+# Eden Shelter API Server Management Script
 
 case "$1" in
   start)
-    echo "🚀 Starting Pizza Finder API..."
+    echo "Starting Eden Shelter API..."
     cd "$(dirname "$0")"
     npm run dev
     ;;
   
   stop)
-    echo "🛑 Stopping Pizza Finder API..."
+    echo "Stopping Eden Shelter API..."
     lsof -ti:3000 | xargs kill 2>/dev/null && echo "✅ Server stopped" || echo "⚠️  No server running on port 3000"
     ;;
   
   restart)
-    echo "🔄 Restarting Pizza Finder API..."
+    echo "Restarting Eden Shelter API..."
     lsof -ti:3000 | xargs kill 2>/dev/null
     sleep 1
     cd "$(dirname "$0")"
@@ -38,8 +38,8 @@ case "$1" in
     curl -s http://localhost:3000/health | python3 -m json.tool
     echo ""
     echo ""
-    echo "2. Nearest Pizza (SF Downtown):"
-    curl -s "http://localhost:3000/api/nearest?lat=37.7749&lon=-122.4194&limit=3" | python3 -m json.tool | head -40
+    echo "2. Nearest Shelters (SF Downtown):"
+    curl -s "http://localhost:3000/api/shelters/nearest?lat=37.7749&lon=-122.4194&limit=3" | python3 -m json.tool | head -40
     ;;
   
   logs)
@@ -63,7 +63,7 @@ case "$1" in
     ;;
   
   *)
-    echo "Pizza Finder API - Server Management"
+    echo "Eden Shelter API - Server Management"
     echo ""
     echo "Usage: ./server.sh [command]"
     echo ""

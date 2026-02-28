@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Pizza Finder API Setup Script
-# This script sets up the database and imports data
+# Eden Shelter API Setup Script
+# This script sets up the database and imports shelter seed data
 
 set -e
 
-echo "🍕 Pizza Finder API Setup"
-echo "========================="
+echo "Eden Shelter API Setup"
+echo "======================"
 echo ""
 
 # Colors for output
@@ -21,7 +21,7 @@ if [ -f .env ]; then
     export $(cat .env | grep -v '^#' | xargs)
 else
     echo -e "${YELLOW}Warning: .env file not found. Using defaults.${NC}"
-    export DB_NAME=pizza_db
+    export DB_NAME=eden_db
     export DB_USER=postgres
     export DB_HOST=localhost
     export DB_PORT=5432
@@ -42,13 +42,13 @@ echo -e "${GREEN}✓ PostgreSQL is running${NC}"
 
 echo ""
 echo "Step 3: Creating database (if it doesn't exist)..."
-psql -h ${DB_HOST:-localhost} -p ${DB_PORT:-5432} -U ${DB_USER:-postgres} -tc "SELECT 1 FROM pg_database WHERE datname = '${DB_NAME:-pizza_db}'" | grep -q 1 || \
-psql -h ${DB_HOST:-localhost} -p ${DB_PORT:-5432} -U ${DB_USER:-postgres} -c "CREATE DATABASE ${DB_NAME:-pizza_db};"
+psql -h ${DB_HOST:-localhost} -p ${DB_PORT:-5432} -U ${DB_USER:-postgres} -tc "SELECT 1 FROM pg_database WHERE datname = '${DB_NAME:-eden_db}'" | grep -q 1 || \
+psql -h ${DB_HOST:-localhost} -p ${DB_PORT:-5432} -U ${DB_USER:-postgres} -c "CREATE DATABASE ${DB_NAME:-eden_db};"
 echo -e "${GREEN}✓ Database ready${NC}"
 
 echo ""
 echo "Step 4: Initializing database schema..."
-psql -h ${DB_HOST:-localhost} -p ${DB_PORT:-5432} -U ${DB_USER:-postgres} -d ${DB_NAME:-pizza_db} -f init_db.sql
+psql -h ${DB_HOST:-localhost} -p ${DB_PORT:-5432} -U ${DB_USER:-postgres} -d ${DB_NAME:-eden_db} -f init_db.sql
 echo -e "${GREEN}✓ Schema initialized${NC}"
 
 echo ""
@@ -73,7 +73,7 @@ echo ""
 echo "The API will be available at: http://localhost:${PORT:-3000}"
 echo ""
 echo "Example API call:"
-echo "  curl \"http://localhost:${PORT:-3000}/api/nearest?lat=37.7749&lon=-122.4194&limit=5\""
+echo "  curl \"http://localhost:${PORT:-3000}/api/shelters/nearest?lat=37.7749&lon=-122.4194&limit=5\""
 echo ""
 
 

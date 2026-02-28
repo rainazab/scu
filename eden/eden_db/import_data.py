@@ -1,199 +1,125 @@
 #!/usr/bin/env python3
-"""Import geocoded location CSV rows into the Eden shelters table."""
+"""Import DV shelter seed data from CSV into Eden PostgreSQL."""
 
 import csv
-import psycopg2
-import re
 import os
-from decimal import Decimal
+from datetime import datetime
 
-# Database connection parameters
+import psycopg2
+
 DB_CONFIG = {
-    'dbname': os.getenv('DB_NAME', 'eden_db'),
-    'user': os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD', 'postgres'),
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432')
+    "dbname": os.getenv("DB_NAME", "eden_db"),
+    "user": os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("DB_PASSWORD", "postgres"),
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": os.getenv("DB_PORT", "5432"),
 }
 
-def parse_address(address_str):
-    """Parse address string into components"""
-    if not address_str or address_str.strip() == '':
-        return None, None, None, None
-    
-    # Address format: "2680 22nd St | San Francisco | CA | 94110"
-    # Sometimes has extra text after zipcode, so we need to clean it
-    parts = [p.strip() for p in address_str.split('|')]
-    
-    street = parts[0] if len(parts) > 0 else None
-    city = parts[1] if len(parts) > 1 else None
-    state = parts[2] if len(parts) > 2 else None
-    zipcode_raw = parts[3] if len(parts) > 3 else None
-    
-    # Clean zipcode - take only the first word/number
-    if zipcode_raw:
-        # Split by whitespace or newline and take first part
-        zipcode = zipcode_raw.split()[0] if zipcode_raw.split() else None
-    else:
-        zipcode = None
-    
-    full_address = f"{street}, {city}, {state} {zipcode}" if all([street, city, state, zipcode]) else address_str
-    
-    return full_address, city, state, zipcode
 
-def parse_coordinates(coord_str):
-    """Parse coordinates string into latitude and longitude"""
-    if not coord_str or coord_str.strip() == '':
-        return None, None
-    
-    # Coordinates format: "37.6879, -122.4702"
-    parts = [p.strip() for p in coord_str.split(',')]
-    
-    if len(parts) == 2:
-        try:
-            lat = float(parts[0])
-            lon = float(parts[1])
-            return lat, lon
-        except ValueError:
-            return None, None
-    
-    return None, None
+def parse_bool(value: str) -> bool:
+    return str(value).strip().lower() in {"true", "1", "yes", "y"}
 
-def parse_price(price_str):
-    """Parse price string into decimal"""
-    if not price_str or price_str.strip() == '':
+
+def parse_languages(value: str) -> list[str]:
+    if not value:
+        return ["English"]
+    return [v.strip() for v in value.split("|") if v.strip()]
+
+
+def parse_timestamp(value: str):
+    if not value:
         return None
-    
-    # Remove dollar sign and any whitespace
-    price_str = price_str.replace('$', '').strip()
-    
     try:
-        return Decimal(price_str)
-    except:
+        return datetime.fromisoformat(value)
+    except ValueError:
         return None
 
-def parse_rating(rating_str):
-    """Parse rating string into decimal"""
-    if not rating_str or rating_str.strip() == '':
-        return None
-    
-    try:
-        return Decimal(rating_str)
-    except:
-        return None
 
-def import_csv_to_db(csv_file):
-    """Import CSV data into PostgreSQL database"""
-    
+def import_csv_to_db(csv_file: str) -> None:
     conn = None
+    inserted = 0
+    skipped = 0
+
     try:
-        # Connect to database
         print(f"Connecting to database {DB_CONFIG['dbname']}...")
         conn = psycopg2.connect(**DB_CONFIG)
         cursor = conn.cursor()
-        
-        # Read CSV file
-        print(f"Reading CSV file: {csv_file}")
-        with open(csv_file, 'r', encoding='utf-8') as f:
-            csv_reader = csv.DictReader(f)
-            
-            insert_count = 0
-            skip_count = 0
-            
-            for row in csv_reader:
-                try:
-                    # Extract data from CSV columns
-                    url = row.get('URL', '').strip()
-                    name = row.get('Title', '').strip()
-                    description = row.get('Description', '').strip()
-                    
-                    # Parse address
-                    address_str = row.get('Address (Result)', '').strip()
-                    full_address, city, state, zipcode = parse_address(address_str)
-                    
-                    # Parse coordinates
-                    coord_str = row.get('Coordinates (Result)', '').strip()
-                    latitude, longitude = parse_coordinates(coord_str)
-                    
-                    # Parse phone - limit to 50 chars
-                    intake_phone = row.get('Phone Number (Result)', '').strip()
-                    if len(intake_phone) > 50:
-                        intake_phone = intake_phone[:50]
 
-                    # Keep backward compatibility with the existing source CSV.
-                    # Most shelter-specific fields are initialized with safe defaults.
-                    bed_count = None
-                    available_beds = 0
-                    accepts_children = False
-                    accepts_pets = False
-                    languages_spoken = ['English']
-                    
-                    # Skip if no coordinates (required for geospatial queries)
-                    if latitude is None or longitude is None:
-                        skip_count += 1
+        print(f"Reading CSV file: {csv_file}")
+        with open(csv_file, "r", encoding="utf-8") as f:
+            rows = csv.DictReader(f)
+            for row in rows:
+                try:
+                    shelter_name = row.get("shelter_name", "").strip()
+                    city = row.get("city", "").strip()
+                    state = row.get("state", "").strip()
+                    latitude = float(row.get("latitude", ""))
+                    longitude = float(row.get("longitude", ""))
+
+                    if not shelter_name or not city or not state:
+                        skipped += 1
                         continue
-                    
-                    # Insert into database
-                    cursor.execute("""
-                        INSERT INTO shelters
-                        (url, shelter_name, description,
-                         address, city, state, zipcode,
-                         intake_phone, bed_count, available_beds, accepts_children,
-                         accepts_pets, languages_spoken, last_verified_at,
-                         coordinates, latitude, longitude)
-                        VALUES 
-                        (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), ST_GeogFromText(%s), %s, %s)
-                    """, (
-                        url,
-                        name,
-                        description,
-                        full_address,
-                        city,
-                        state,
-                        zipcode,
-                        intake_phone,
-                        bed_count,
-                        available_beds,
-                        accepts_children,
-                        accepts_pets,
-                        languages_spoken,
-                        f'POINT({longitude} {latitude})',  # PostGIS uses lon/lat order
-                        latitude,
-                        longitude
-                    ))
-                    
-                    insert_count += 1
-                    
-                except Exception as e:
-                    print(f"Error processing row for {name}: {e}")
-                    print(f"  Address: {address_str[:50] if address_str else 'None'}...")
-                    print(f"  Zipcode: {zipcode}")
-                    conn.rollback()  # Rollback the failed transaction
-                    skip_count += 1
-                    continue
-            
-            # Commit changes
-            conn.commit()
-            print(f"\nImport complete!")
-            print(f"Inserted: {insert_count} records")
-            print(f"Skipped: {skip_count} records")
-            
-            # Display sample data
-            cursor.execute("SELECT COUNT(*) FROM shelters")
-            total = cursor.fetchone()[0]
-            print(f"Total records in database: {total}")
-            
-            cursor.close()
-            
-    except Exception as e:
-        print(f"Error: {e}")
+
+                    cursor.execute(
+                        """
+                        INSERT INTO shelters (
+                            url, shelter_name, description, address, city, state, zipcode,
+                            intake_phone, bed_count, available_beds, accepts_children,
+                            accepts_pets, languages_spoken, last_verified_at,
+                            coordinates, latitude, longitude
+                        )
+                        VALUES (
+                            %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s,
+                            %s, %s, %s,
+                            ST_GeogFromText(%s), %s, %s
+                        )
+                        """,
+                        (
+                            row.get("url", "").strip() or None,
+                            shelter_name,
+                            row.get("description", "").strip() or None,
+                            row.get("address", "").strip() or None,
+                            city,
+                            state,
+                            row.get("zipcode", "").strip() or None,
+                            row.get("intake_phone", "").strip() or None,
+                            int(row.get("bed_count", "0") or 0),
+                            int(row.get("available_beds", "0") or 0),
+                            parse_bool(row.get("accepts_children", "")),
+                            parse_bool(row.get("accepts_pets", "")),
+                            parse_languages(row.get("languages_spoken", "")),
+                            parse_timestamp(row.get("last_verified_at", "")),
+                            f"POINT({longitude} {latitude})",
+                            latitude,
+                            longitude,
+                        ),
+                    )
+                    inserted += 1
+                except Exception as row_error:
+                    print(f"Skipping row due to error: {row_error}")
+                    skipped += 1
+
+        conn.commit()
+        cursor.execute("SELECT COUNT(*) FROM shelters")
+        total = cursor.fetchone()[0]
+        cursor.close()
+
+        print("\nImport complete.")
+        print(f"Inserted: {inserted}")
+        print(f"Skipped: {skipped}")
+        print(f"Total rows in shelters table: {total}")
+
+    except Exception as error:
+        print(f"Error: {error}")
         if conn:
             conn.rollback()
     finally:
         if conn:
             conn.close()
 
-if __name__ == '__main__':
-    csv_file = 'webset-companies_sf_pizza_chains_cheese_pizza_price_address_coordinates_phone.csv'
+
+if __name__ == "__main__":
+    csv_file = "data/shelters_seed.csv"
     import_csv_to_db(csv_file)
 
