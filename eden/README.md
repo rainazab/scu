@@ -39,11 +39,35 @@ This repo is being rebuilt from the original CalHacks code in short phases so ea
 - Added escalation policy enforcement for high-risk live operations
 - Added safety dashboard signals and escalation event logging
 
-## Phase 5A (current)
+## Phase 5A
 - Added Postgres persistence for call jobs and warm transfer sessions
 - Added persisted escalation events and blocked numbers
 - Added startup bootstrap to load persisted safety state into runtime
 - Added persistence schema for operational state tables
 
+## Phase 6A (current)
+- Added intake experience end-to-end:
+  - `POST /api/intake`
+  - `GET /api/intake/status/:job_id`
+  - static mobile UI at `intake/index.html`
+- Added demo hardening:
+  - dry-run staged progression (fail/fail/found)
+  - `POST /api/demo/reset`
+- Added Twilio recording webhook path and call recording flag gating
+- Added SMS delivery helper for found/no-result outcomes
+- Added static ops dashboard at `dashboard/index.html`
+- Added local container setup:
+  - `docker-compose.yml`
+  - `eden_db/Dockerfile`
+  - `START.md`
+
+## Suggested Commit Sequence
+- `phase-6a-recording-and-sms`: `src/twilio_client.ts`, recording webhook in `src/index.ts`, `env.template`
+- `phase-6a-intake-api`: intake endpoints and demo reset in `src/index.ts`, updates to `src/call_jobs.ts` and `src/warm_transfer.ts`
+- `phase-6a-seed-data`: `data/shelters_seed.csv` replacement
+- `phase-6a-intake-ui`: `intake/index.html`
+- `phase-6a-dashboard-ui`: `dashboard/index.html`
+- `phase-6a-devops`: `docker-compose.yml`, `eden_db/Dockerfile`, `START.md`, docs updates
+
 ## Next Short Phases
-- **Phase 5B:** auth/role controls for admin/safety endpoints
+- **Phase 6B:** auth/role controls for admin/safety endpoints + API key middleware
