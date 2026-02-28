@@ -20,6 +20,7 @@ export interface CallAttempt {
   status: CallAttemptStatus;
   generated_script?: string;
   provider_call_sid?: string;
+  recording_url?: string;
   error?: string;
   transcript_excerpt?: string;
   parsed_transcript?: {
@@ -41,6 +42,8 @@ export interface CallJob {
   request: {
     survivor_context: string;
     callback_number?: string;
+    anonymous_mode?: boolean;
+    escalation_approved?: boolean;
     shelter_ids: number[];
   };
   attempts: CallAttempt[];
@@ -54,6 +57,8 @@ export class CallJobStore {
     mode: CallMode;
     survivor_context: string;
     callback_number?: string;
+    anonymous_mode?: boolean;
+    escalation_approved?: boolean;
     targets: ShelterCallTarget[];
   }): CallJob {
     const now = new Date().toISOString();
@@ -76,6 +81,8 @@ export class CallJobStore {
       request: {
         survivor_context: params.survivor_context,
         callback_number: params.callback_number,
+        anonymous_mode: params.anonymous_mode,
+        escalation_approved: params.escalation_approved,
         shelter_ids: params.targets.map((t) => t.id),
       },
       attempts,
@@ -116,6 +123,11 @@ export class CallJobStore {
     const attempt = job.attempts.find((a) => a.attempt_id === pointer.attempt_id);
     if (!attempt) return undefined;
     return { job, attempt };
+  }
+
+  reset(): void {
+    this.jobs.clear();
+    this.sidToAttempt.clear();
   }
 
   private recomputeJobStatus(job: CallJob): void {

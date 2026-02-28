@@ -37,3 +37,53 @@ CREATE INDEX idx_shelters_name ON shelters(shelter_name);
 CREATE INDEX idx_shelters_available_beds ON shelters(available_beds DESC);
 CREATE INDEX idx_shelters_last_verified_at ON shelters(last_verified_at DESC);
 
+-- Persistent runtime state tables (Phase 5A)
+CREATE TABLE IF NOT EXISTS call_jobs (
+    job_id UUID PRIMARY KEY,
+    mode TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    survivor_context TEXT NOT NULL,
+    callback_number TEXT,
+    anonymous_mode BOOLEAN DEFAULT FALSE,
+    escalation_approved BOOLEAN DEFAULT FALSE,
+    shelter_ids INTEGER[] NOT NULL,
+    attempts JSONB NOT NULL DEFAULT '[]'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS warm_transfers (
+    transfer_id UUID PRIMARY KEY,
+    mode TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    conference_name TEXT NOT NULL,
+    job_id UUID NOT NULL,
+    attempt_id UUID NOT NULL,
+    shelter_name TEXT NOT NULL,
+    shelter_phone TEXT NOT NULL,
+    survivor_phone TEXT NOT NULL,
+    survivor_name TEXT,
+    notes TEXT,
+    call_sids JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS escalation_events (
+    escalation_id UUID PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL,
+    source TEXT NOT NULL,
+    reference_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    details TEXT
+);
+
+CREATE TABLE IF NOT EXISTS blocked_numbers (
+    phone TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_call_jobs_updated_at ON call_jobs(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_warm_transfers_updated_at ON warm_transfers(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_escalation_events_created_at ON escalation_events(created_at DESC);
+

@@ -4,6 +4,9 @@
 Phase 2A adds an outbound call queue skeleton and Twilio webhook handling in addition to the shelter geospatial API.
 Phase 2B adds AI-assisted call script generation and transcript parsing with a deterministic fallback.
 Phase 3A adds warm transfer orchestration and dashboard endpoints for operations visibility.
+Phase 4A adds no-call-back controls, anonymous mode, and escalation policy enforcement.
+Phase 5A persists jobs/transfers/escalations/blocked numbers to Postgres.
+Gap fill adds intake flow UI/API, dashboard UI, call recording, demo reset, and optional SMS updates.
 
 ## Local Development
 ```bash
@@ -47,6 +50,14 @@ python3 import_data.py
 - `POST /webhooks/twilio/warm-transfer-status`
 - `GET /api/dashboard/overview`
 - `GET /api/dashboard/activity`
+- `POST /api/intake`
+- `GET /api/intake/status/:job_id`
+- `POST /api/demo/reset`
+- `GET /api/safety/config`
+- `GET /api/safety/no-callback-numbers`
+- `POST /api/safety/no-callback-numbers`
+- `DELETE /api/safety/no-callback-numbers`
+- `GET /api/safety/escalations`
 
 ## Notes
 - `analytics_benchmarks` remains for benchmarking experiments only.
@@ -55,3 +66,8 @@ python3 import_data.py
 - Optional `TWILIO_WARM_TRANSFER_STATUS_CALLBACK_URL` can route transfer-leg status updates separately.
 - AI features use `OPENAI_API_KEY` when configured; otherwise fallback logic remains active.
 - Warm transfers are conference-bridge based. In dry-run mode, transfers are simulated.
+- `anonymous_mode=true` redacts user-provided context and suppresses survivor-identifying callback behavior.
+- `EDEN_NO_CALLBACK_NUMBERS` blocks protected numbers from outbound dialing/callback usage.
+- `EDEN_REQUIRE_ESCALATION_FOR_LIVE=true` requires `escalation_approved=true` on high-risk live operations.
+- `EDEN_PERSISTENCE_ENABLED=true` stores runtime state in Postgres and restores safety data at startup.
+- `ENABLE_CALL_RECORDING=true` enables Twilio call recording callbacks.
