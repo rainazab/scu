@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Script to import pizza location data from CSV into PostgreSQL database
-"""
+"""Import geocoded location CSV rows into the Eden shelters table."""
 
 import csv
 import psycopg2
@@ -11,7 +9,7 @@ from decimal import Decimal
 
 # Database connection parameters
 DB_CONFIG = {
-    'dbname': os.getenv('DB_NAME', 'pizza_db'),
+    'dbname': os.getenv('DB_NAME', 'eden_db'),
     'user': os.getenv('DB_USER', 'postgres'),
     'password': os.getenv('DB_PASSWORD', 'postgres'),
     'host': os.getenv('DB_HOST', 'localhost'),
@@ -109,14 +107,6 @@ def import_csv_to_db(csv_file):
                     name = row.get('Title', '').strip()
                     description = row.get('Description', '').strip()
                     
-                    # Check if it's a chain
-                    is_chain_str = row.get('business is a pizza chain with at least one physical location in san francisco (Criterion)', '').strip().lower()
-                    is_chain = is_chain_str == 'yes'
-                    
-                    # Parse price
-                    price_str = row.get('Cheese Pizza Price (Result)', '').strip()
-                    cheese_pizza_price = parse_price(price_str)
-                    
                     # Parse address
                     address_str = row.get('Address (Result)', '').strip()
                     full_address, city, state, zipcode = parse_address(address_str)
@@ -126,13 +116,17 @@ def import_csv_to_db(csv_file):
                     latitude, longitude = parse_coordinates(coord_str)
                     
                     # Parse phone - limit to 50 chars
-                    phone_number = row.get('Phone Number (Result)', '').strip()
-                    if len(phone_number) > 50:
-                        phone_number = phone_number[:50]
-                    
-                    # Parse rating
-                    rating_str = row.get('Shop Rating (Result)', '').strip()
-                    shop_rating = parse_rating(rating_str)
+                    intake_phone = row.get('Phone Number (Result)', '').strip()
+                    if len(intake_phone) > 50:
+                        intake_phone = intake_phone[:50]
+
+                    # Keep backward compatibility with the existing source CSV.
+                    # Most shelter-specific fields are initialized with safe defaults.
+                    bed_count = None
+                    available_beds = 0
+                    accepts_children = False
+                    accepts_pets = False
+                    languages_spoken = ['English']
                     
                     # Skip if no coordinates (required for geospatial queries)
                     if latitude is None or longitude is None:
@@ -141,27 +135,31 @@ def import_csv_to_db(csv_file):
                     
                     # Insert into database
                     cursor.execute("""
-                        INSERT INTO pizza_locations 
-                        (url, name, description, is_chain, cheese_pizza_price, 
-                         address, city, state, zipcode, coordinates, latitude, longitude,
-                         phone_number, shop_rating)
+                        INSERT INTO shelters
+                        (url, shelter_name, description,
+                         address, city, state, zipcode,
+                         intake_phone, bed_count, available_beds, accepts_children,
+                         accepts_pets, languages_spoken, last_verified_at,
+                         coordinates, latitude, longitude)
                         VALUES 
-                        (%s, %s, %s, %s, %s, %s, %s, %s, %s, ST_GeogFromText(%s), %s, %s, %s, %s)
+                        (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), ST_GeogFromText(%s), %s, %s)
                     """, (
                         url,
                         name,
                         description,
-                        is_chain,
-                        cheese_pizza_price,
                         full_address,
                         city,
                         state,
                         zipcode,
+                        intake_phone,
+                        bed_count,
+                        available_beds,
+                        accepts_children,
+                        accepts_pets,
+                        languages_spoken,
                         f'POINT({longitude} {latitude})',  # PostGIS uses lon/lat order
                         latitude,
-                        longitude,
-                        phone_number,
-                        shop_rating
+                        longitude
                     ))
                     
                     insert_count += 1
@@ -181,7 +179,7 @@ def import_csv_to_db(csv_file):
             print(f"Skipped: {skip_count} records")
             
             # Display sample data
-            cursor.execute("SELECT COUNT(*) FROM pizza_locations")
+            cursor.execute("SELECT COUNT(*) FROM shelters")
             total = cursor.fetchone()[0]
             print(f"Total records in database: {total}")
             

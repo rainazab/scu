@@ -1,7 +1,7 @@
 {
-  "name": "pizza-finder-api",
+  "name": "eden-shelter-api",
   "version": "1.0.0",
-  "description": "Express API to find nearest pizza locations",
+  "description": "Express API to find nearest domestic violence shelters",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -11,7 +11,9 @@
     "import-data": "python3 import_data.py"
   },
   "keywords": [
-    "pizza",
+    "eden",
+    "shelter",
+    "domestic-violence",
     "api",
     "express",
     "postgresql",
@@ -23,7 +25,6 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "googleapis": "^164.1.0",
     "pg": "^8.11.3"
   },
   "devDependencies": {
