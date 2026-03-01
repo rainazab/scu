@@ -47,11 +47,11 @@
         margin-bottom: 12px;
       }
       .alert {
-        background: #fff3f2;
-        border: 1px solid #f4b8b2;
+        background: rgba(180, 30, 20, 0.2);
+        border: 1px solid rgba(180, 30, 20, 0.5);
         border-radius: 12px;
         padding: 10px 12px;
-        color: #8d1f16;
+        color: #c0392b;
         margin-bottom: 12px;
         font-size: 14px;
       }
@@ -94,6 +94,12 @@
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent !important;
+      }
+      #safetyModal h2, #safetyModal p, #safetyModal strong, #safetyModal button {
+        background: none !important;
+        -webkit-background-clip: unset !important;
+        background-clip: unset !important;
+        color: #3a3a3a !important;
       }
       .chip, .yn, .lang, .btn {
         color: #4a5e3a !important;
@@ -233,6 +239,40 @@
     </style>
   </head>
   <body>
+    <div id="safetyModal" style="
+      position: fixed; inset: 0; z-index: 999;
+      background: rgba(0,0,0,0.6);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    ">
+      <div style="
+        background: rgba(255,255,255,0.35);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,0.5);
+        border-radius: 20px;
+        padding: 28px 24px;
+        max-width: 400px;
+        width: 100%;
+        position: relative;
+      ">
+        <button onclick="document.getElementById('safetyModal').remove()" style="
+          position: absolute; top: 12px; right: 14px;
+          background: none; border: none; font-size: 20px; cursor: pointer; color: #3a3a3a;
+        ">✕</button>
+        <h2 style="margin: 0 0 12px; font-size: 20px; color: #3a3a3a;">Leave this site safely</h2>
+        <p style="margin: 0 0 10px; font-size: 15px; color: #3a3a3a;">You can quickly leave this website by clicking the <strong>✕</strong> in the top right or by pressing the <strong>Escape key twice</strong>.</p>
+        <p style="margin: 0; font-size: 15px; color: #3a3a3a;">To browse this site safely, be sure to regularly <strong>clear your browser history</strong>.</p>
+        <button onclick="document.getElementById('safetyModal').remove()" style="
+          margin-top: 20px; width: 100%;
+          background: rgba(255,255,255,0.3);
+          border: 1px solid rgba(255,255,255,0.5);
+          border-radius: 12px; padding: 12px;
+          font-size: 15px; cursor: pointer; color: #3a3a3a;
+          font-family: 'Inter', sans-serif; font-weight: 300;
+        ">I understand</button>
+      </div>
+    </div>
     <div class="app">
       <div class="top">
         <strong>Eden</strong>
@@ -757,6 +797,18 @@
           box.innerHTML = `<h3 style="margin:0 0 8px;color:#d97706;">No Immediate Bed</h3><p>${labels[lang].noBeds(data.attempts.length)}</p>`;
         }
       }
+
+      let escCount = 0, escTimer = null;
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          const modal = document.getElementById('safetyModal');
+          if (modal) { modal.remove(); return; }
+          escCount++;
+          clearTimeout(escTimer);
+          escTimer = setTimeout(() => escCount = 0, 1000);
+          if (escCount >= 2) window.location.replace('https://www.google.com');
+        }
+      });
 
       setStep(1);
       syncLabels();
