@@ -6,15 +6,15 @@
     <title>Eden Intake</title>
     <style>
       :root {
-        --bg: #f4f8ff;
+        --bg: #f5f7fb;
         --card: #ffffff;
-        --text: #14213d;
-        --muted: #5e6b85;
-        --primary: #2f6fff;
-        --primary-soft: #eaf1ff;
-        --ok: #1f9d5b;
-        --warn: #d97706;
-        --bad: #c0392b;
+        --text: #0f1f33;
+        --muted: #5a6b82;
+        --primary: #1858a8;
+        --primary-soft: #e9f1fc;
+        --ok: #0d8a52;
+        --warn: #a76a00;
+        --bad: #b42318;
       }
       * { box-sizing: border-box; }
       body {
@@ -36,20 +36,20 @@
         margin-bottom: 12px;
       }
       .alert {
-        background: #fff8e8;
-        border: 1px solid #f5d28f;
+        background: #fff3f2;
+        border: 1px solid #f4b8b2;
         border-radius: 12px;
         padding: 10px 12px;
-        color: #7a4b00;
+        color: #8d1f16;
         margin-bottom: 12px;
         font-size: 14px;
       }
       .privacy-pill {
         display: inline-block;
         font-size: 12px;
-        background: #eaf8ef;
-        color: #1f6b42;
-        border: 1px solid #b8e3c8;
+        background: #edf3ff;
+        color: #1b4c8f;
+        border: 1px solid #c7daf8;
         border-radius: 999px;
         padding: 6px 10px;
         margin-bottom: 10px;
@@ -93,13 +93,14 @@
         font-weight: 600;
       }
       label { display: block; margin: 12px 0 6px; font-weight: 600; }
-      input, textarea {
+      input, textarea, select {
         width: 100%;
         border: 1px solid #cfd8ea;
         border-radius: 12px;
         min-height: 48px;
         padding: 10px 12px;
         font-size: 16px;
+        background: #fff;
       }
       textarea { min-height: 88px; resize: vertical; }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -173,6 +174,11 @@
       }
       .hide { display: none; }
       .small { font-size: 13px; color: var(--muted); }
+      .hint {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
@@ -208,16 +214,32 @@
             <button class="yn" data-field="pets" data-val="true" id="petsYes">Yes</button>
             <button class="yn" data-field="pets" data-val="false" id="petsNo">No</button>
           </div>
+          <label id="languagePrefLabel">Preferred spoken language</label>
+          <select id="preferredLanguage">
+            <option value="English">English</option>
+            <option value="Spanish">Spanish</option>
+            <option value="Mandarin">Mandarin</option>
+            <option value="Cantonese">Cantonese</option>
+            <option value="Vietnamese">Vietnamese</option>
+            <option value="Tagalog">Tagalog</option>
+            <option value="Hindi">Hindi</option>
+            <option value="Other">Other</option>
+          </select>
+          <label id="urgencyLabel">How urgently do you need shelter?</label>
+          <select id="urgency">
+            <option value="tonight">Tonight</option>
+            <option value="within_24h">Within 24 hours</option>
+            <option value="within_72h">Within 72 hours</option>
+          </select>
           <label id="locLabel">What city or neighborhood are you in?</label>
           <input id="location" placeholder="e.g. Mission District, SF" />
           <label id="notesLabel">Anything urgent we should know? (optional)</label>
           <textarea id="notes" maxlength="200" placeholder="e.g. I need wheelchair access"></textarea>
         </div>
         <div id="step3" class="hide">
-          <h2 id="s3title">How do we reach you?</h2>
-          <label id="phoneLabel">What number can we text results to?</label>
-          <input id="phone" type="tel" placeholder="+1 (415) 555-0199" />
-          <p class="small" id="privacyNote">We only use this to text you results. We don't store your name.</p>
+          <h2 id="s3title">Confirm and start search</h2>
+          <p class="small" id="startNote">Eden will start calling nearby shelters immediately and show live status updates here.</p>
+          <p class="hint" id="resultNote">Results appear on this page when calls complete.</p>
         </div>
         <div class="actions">
           <button id="backBtn" class="btn secondary hide">Back</button>
@@ -242,13 +264,14 @@
       let lang = "en";
 
       const state = {
-        needs: [],
+        needs: ["dv_specific", "shelter"],
         people_count: 1,
         has_children: false,
         has_pets: false,
+        preferred_language: "English",
+        urgency: "tonight",
         location: "",
         notes: "",
-        callback_number: "",
       };
 
       const labels = {
@@ -261,139 +284,71 @@
           submit: "Find Help Now →",
           s1title: "What do you need?",
           s2title: "About your situation",
-          s3title: "How do we reach you?",
+          s3title: "Confirm and start search",
           peopleLabel: "How many people need help?",
           childrenLabel: "Do you have children with you?",
           petsLabel: "Do you have pets?",
+          languagePrefLabel: "Preferred spoken language",
+          urgencyLabel: "How urgently do you need shelter?",
           locLabel: "What city or neighborhood are you in?",
           notesLabel: "Anything urgent we should know? (optional)",
-          phoneLabel: "What number can we text results to?",
-          privacyNote: "We only use this to text you results. We don't store your name.",
-          statusTitle: "Your agent is calling shelters now...",
+          startNote: "Eden will start calling nearby shelters immediately and show live status updates here.",
+          resultNote: "Results appear on this page when calls complete.",
+          statusTitle: "Eden is contacting shelters now...",
           statusSub: "Please stay on this screen while we check availability.",
           noBeds: (n) => `We tried ${n} shelters. No beds tonight. Call 211 for free 24/7 help.`,
-          found: "They're expecting you. A text has been sent.",
+          found: "They're expecting you. Please call the shelter now.",
           safetyAlert: "If you are in immediate danger, call 911 now.",
           heroTitle: "You deserve to be safe tonight.",
           privacyPill: "No name required. No account created.",
           yes: "Yes",
           no: "No",
           chips: [
-            ["dv_specific", "🛡️ Fleeing abuse or violence"],
-            ["immigrant", "🌎 Immigrant support — No status required"],
-            ["shelter", "🏠 A place to sleep tonight"],
-            ["medical", "🏥 Medical help"],
-            ["mental_health", "🧠 Mental health support"],
-            ["children_support", "👨‍👩‍👧 Help with children"],
-            ["other", "📋 Other"],
+            ["dv_specific", "Fleeing abuse or violence"],
+            ["immigrant", "Immigrant support - no status required"],
+            ["shelter", "Immediate shelter tonight"],
+            ["medical", "Medical support"],
+            ["mental_health", "Mental health support"],
+            ["children_support", "Family and children support"],
+            ["other", "Other urgent support"],
           ],
         },
         es: {
           langShort: "ES",
-          nextLangShort: "中文",
+          nextLangShort: "EN",
           step: (n) => `Paso ${n} de 3`,
           next: "Siguiente",
           back: "Atrás",
           submit: "Buscar ayuda ahora →",
           s1title: "¿Qué necesitas?",
           s2title: "Sobre tu situación",
-          s3title: "¿Cómo te contactamos?",
+          s3title: "Confirma e inicia la búsqueda",
           peopleLabel: "¿Cuántas personas necesitan ayuda?",
           childrenLabel: "¿Tienes niños contigo?",
           petsLabel: "¿Tienes mascotas?",
+          languagePrefLabel: "Idioma preferido para hablar",
+          urgencyLabel: "¿Qué tan urgente necesitas refugio?",
           locLabel: "¿En qué ciudad o vecindario estás?",
           notesLabel: "¿Algo urgente que debamos saber? (opcional)",
-          phoneLabel: "¿A qué número te enviamos resultados por SMS?",
-          privacyNote: "Solo usamos este número para enviarte resultados. No guardamos tu nombre.",
-          statusTitle: "Tu agente está llamando refugios ahora...",
+          startNote: "Eden empezará a llamar a refugios cercanos de inmediato y mostrará actualizaciones aquí.",
+          resultNote: "Los resultados aparecerán en esta página cuando terminen las llamadas.",
+          statusTitle: "Eden está contactando refugios ahora...",
           statusSub: "Quédate en esta pantalla mientras verificamos disponibilidad.",
           noBeds: (n) => `Intentamos ${n} refugios. No hay camas esta noche. Llama al 211.`,
-          found: "Te están esperando. Se envió un mensaje de texto.",
+          found: "Te están esperando. Llama al refugio ahora.",
           safetyAlert: "Si estás en peligro inmediato, llama al 911 ahora.",
           heroTitle: "Mereces estar a salvo esta noche.",
           privacyPill: "No se requiere nombre. No se crea cuenta.",
           yes: "Sí",
           no: "No",
           chips: [
-            ["dv_specific", "🛡️ Huyendo de abuso o violencia"],
-            ["immigrant", "🌎 Apoyo para inmigrantes — sin estatus requerido"],
-            ["shelter", "🏠 Un lugar para dormir esta noche"],
-            ["medical", "🏥 Ayuda médica"],
-            ["mental_health", "🧠 Salud mental"],
-            ["children_support", "👨‍👩‍👧 Ayuda con niños"],
-            ["other", "📋 Otro"],
-          ],
-        },
-        zh: {
-          langShort: "中文",
-          nextLangShort: "VI",
-          step: (n) => `第 ${n} / 3 步`,
-          next: "下一步",
-          back: "返回",
-          submit: "立即寻找帮助 →",
-          s1title: "你现在需要什么帮助？",
-          s2title: "你的当前情况",
-          s3title: "我们如何联系你？",
-          peopleLabel: "需要帮助的人数",
-          childrenLabel: "你身边有孩子吗？",
-          petsLabel: "你有宠物吗？",
-          locLabel: "你现在在哪个城市或街区？",
-          notesLabel: "还有什么紧急情况？（可选）",
-          phoneLabel: "我们可以把结果短信发到哪个号码？",
-          privacyNote: "我们只用这个号码发送结果，不会保存你的姓名。",
-          statusTitle: "Eden 正在联系避难所...",
-          statusSub: "请留在此页面，我们正在确认床位。",
-          noBeds: (n) => `我们尝试了 ${n} 家机构，今晚暂无床位。请拨打 211 获得 24/7 免费帮助。`,
-          found: "对方已准备接待你，短信已发送。",
-          safetyAlert: "如果你正处于紧急危险，请立即拨打 911。",
-          heroTitle: "你今晚值得拥有安全。",
-          privacyPill: "无需姓名，无需注册账号。",
-          yes: "是",
-          no: "否",
-          chips: [
-            ["dv_specific", "🛡️ 正在逃离虐待或暴力"],
-            ["immigrant", "🌎 移民支持 — 不要求身份"],
-            ["shelter", "🏠 今晚需要住处"],
-            ["medical", "🏥 医疗帮助"],
-            ["mental_health", "🧠 心理支持"],
-            ["children_support", "👨‍👩‍👧 儿童相关帮助"],
-            ["other", "📋 其他"],
-          ],
-        },
-        vi: {
-          langShort: "VI",
-          nextLangShort: "EN",
-          step: (n) => `Bước ${n} / 3`,
-          next: "Tiếp",
-          back: "Quay lại",
-          submit: "Tìm hỗ trợ ngay →",
-          s1title: "Bạn cần hỗ trợ gì?",
-          s2title: "Tình huống của bạn",
-          s3title: "Liên hệ với bạn bằng cách nào?",
-          peopleLabel: "Có bao nhiêu người cần hỗ trợ?",
-          childrenLabel: "Bạn có đi cùng trẻ em không?",
-          petsLabel: "Bạn có thú cưng không?",
-          locLabel: "Bạn đang ở thành phố/khu vực nào?",
-          notesLabel: "Có gì khẩn cấp cần biết không? (tuỳ chọn)",
-          phoneLabel: "Số điện thoại để nhận kết quả qua SMS?",
-          privacyNote: "Chúng tôi chỉ dùng số này để gửi kết quả, không lưu tên của bạn.",
-          statusTitle: "Eden đang gọi các nơi trú ẩn...",
-          statusSub: "Vui lòng ở lại màn hình này khi chúng tôi kiểm tra chỗ trống.",
-          noBeds: (n) => `Đã thử ${n} nơi nhưng chưa có giường tối nay. Hãy gọi 211 để được hỗ trợ 24/7 miễn phí.`,
-          found: "Nơi tiếp nhận đã sẵn sàng. Tin nhắn đã được gửi.",
-          safetyAlert: "Nếu bạn đang gặp nguy hiểm ngay lúc này, hãy gọi 911.",
-          heroTitle: "Bạn xứng đáng được an toàn tối nay.",
-          privacyPill: "Không cần tên. Không tạo tài khoản.",
-          yes: "Có",
-          no: "Không",
-          chips: [
-            ["dv_specific", "🛡️ Đang chạy trốn bạo lực/lạm dụng"],
-            ["immigrant", "🌎 Hỗ trợ cho người nhập cư — không cần giấy tờ"],
-            ["shelter", "🏠 Nơi ở qua đêm"],
-            ["medical", "🏥 Hỗ trợ y tế"],
-            ["mental_health", "🧠 Hỗ trợ sức khỏe tinh thần"],
-            ["children_support", "👨‍👩‍👧 Hỗ trợ cho trẻ em"],
-            ["other", "📋 Khác"],
+            ["dv_specific", "Huyendo de abuso o violencia"],
+            ["immigrant", "Apoyo para inmigrantes - sin estatus requerido"],
+            ["shelter", "Refugio inmediato esta noche"],
+            ["medical", "Apoyo médico"],
+            ["mental_health", "Apoyo de salud mental"],
+            ["children_support", "Apoyo para familias con niños"],
+            ["other", "Otro apoyo urgente"],
           ],
         },
       };
@@ -422,10 +377,12 @@
         document.getElementById("peopleLabel").textContent = labels[lang].peopleLabel;
         document.getElementById("childrenLabel").textContent = labels[lang].childrenLabel;
         document.getElementById("petsLabel").textContent = labels[lang].petsLabel;
+        document.getElementById("languagePrefLabel").textContent = labels[lang].languagePrefLabel;
+        document.getElementById("urgencyLabel").textContent = labels[lang].urgencyLabel;
         document.getElementById("locLabel").textContent = labels[lang].locLabel;
         document.getElementById("notesLabel").textContent = labels[lang].notesLabel;
-        document.getElementById("phoneLabel").textContent = labels[lang].phoneLabel;
-        document.getElementById("privacyNote").textContent = labels[lang].privacyNote;
+        document.getElementById("startNote").textContent = labels[lang].startNote;
+        document.getElementById("resultNote").textContent = labels[lang].resultNote;
         document.getElementById("statusTitle").textContent = labels[lang].statusTitle;
         document.getElementById("statusSub").textContent = labels[lang].statusSub;
         document.getElementById("safetyAlert").textContent = labels[lang].safetyAlert;
@@ -450,7 +407,7 @@
       }
 
       document.getElementById("langBtn").onclick = () => {
-        const order = ["en", "es", "zh", "vi"];
+        const order = ["en", "es"];
         const idx = order.indexOf(lang);
         lang = order[(idx + 1) % order.length];
         document.getElementById("langBtn").textContent = labels[lang].nextLangShort;
@@ -486,11 +443,19 @@
       document.getElementById("backBtn").onclick = () => setStep(Math.max(1, step - 1));
       document.getElementById("nextBtn").onclick = async () => {
         if (step < 3) return setStep(step + 1);
+        state.preferred_language = document.getElementById("preferredLanguage").value;
+        state.urgency = document.getElementById("urgency").value;
         state.location = document.getElementById("location").value.trim();
-        state.notes = document.getElementById("notes").value.trim();
-        state.callback_number = document.getElementById("phone").value.trim();
-        if (!state.callback_number || !state.location || state.needs.length === 0) {
-          alert("Please fill needs, location, and callback number.");
+        const userNotes = document.getElementById("notes").value.trim();
+        state.notes = [
+          userNotes,
+          `preferred_language=${state.preferred_language}`,
+          `urgency=${state.urgency}`,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        if (!state.location || state.needs.length === 0) {
+          alert("Please select needs and enter location.");
           return;
         }
         await submitIntake();
@@ -534,15 +499,15 @@
           const box = document.getElementById("result");
           box.classList.remove("hide");
           box.innerHTML = `
-            <h3 style="margin:0 0 8px;color:#1f9d5b;">✅ Help Found</h3>
+            <h3 style="margin:0 0 8px;color:#1f9d5b;">Help Found</h3>
             <p><strong>${data.result.shelter_name}</strong><br>${data.result.address || ""} ${data.result.city || ""}<br>${data.result.intake_phone || ""}</p>
-            <p>${labels[lang].found} ${state.callback_number}</p>
+            <p>${labels[lang].found}</p>
           `;
         } else if (data.status === "failed") {
           clearInterval(pollTimer);
           const box = document.getElementById("result");
           box.classList.remove("hide");
-          box.innerHTML = `<h3 style="margin:0 0 8px;color:#d97706;">⚠️ No Immediate Bed</h3><p>${labels[lang].noBeds(data.attempts.length)}</p>`;
+          box.innerHTML = `<h3 style="margin:0 0 8px;color:#d97706;">No Immediate Bed</h3><p>${labels[lang].noBeds(data.attempts.length)}</p>`;
         }
       }
 
