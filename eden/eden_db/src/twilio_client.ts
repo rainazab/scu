@@ -120,7 +120,7 @@ export function buildShelterIntakeTwiml(context: {
     if (safeGatherAction) {
       return [
         "<Response>",
-        `<Gather input="speech" action="${safeGatherAction}" method="POST" timeout="15" speechTimeout="5" speechModel="phone_call" enhanced="true" actionOnEmptyResult="true" language="en-US" hints="bed,beds,available,waitlist,intake,requirements,callback,full,capacity">`,
+        `<Gather input="dtmf speech" action="${safeGatherAction}" method="POST" timeout="20" speechTimeout="8" numDigits="1" speechModel="phone_call" enhanced="true" actionOnEmptyResult="true" language="en-US" hints="yes,no,yeah,nope,beds,available,waitlist,full,no beds,hold on,one moment,let me check,intake,requirements,callback">`,
         `<Play>${safeAudioUrl}</Play>`,
         "</Gather>",
         "<Say>We didn't catch your response. Trying to connect again shortly.</Say>",
@@ -159,7 +159,7 @@ export function buildConversationFollowUpTwiml(options: {
     parts.push(`<Play>${safeUrl}</Play>`, "<Hangup/>");
   } else {
     parts.push(
-      `<Gather input="speech" action="${safeAction}" method="POST" timeout="15" speechTimeout="5" speechModel="phone_call" enhanced="true" actionOnEmptyResult="true" language="en-US" hints="bed,beds,available,waitlist,full,capacity,intake">`,
+      `<Gather input="dtmf speech" action="${safeAction}" method="POST" timeout="20" speechTimeout="8" numDigits="1" speechModel="phone_call" enhanced="true" actionOnEmptyResult="true" language="en-US" hints="yes,no,yeah,nope,beds,available,waitlist,full,no beds,hold on,one moment,let me check,intake">`,
       `<Play>${safeUrl}</Play>`,
       "</Gather>",
       "<Say>Still here. Could you say that again?</Say>"

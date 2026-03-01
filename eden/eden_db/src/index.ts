@@ -77,6 +77,8 @@ interface IntakeTracker {
 
 const intakeTrackers = new Map<string, IntakeTracker>();
 const ttsAudioCache = new Map<string, { audio: Buffer; created_at_ms: number }>();
+const gatherDebugLog: Array<{ ts: string; SpeechResult?: string; Digits?: string; CallSid?: string; CallStatus?: string; keys: string[] }> = [];
+const GATHER_DEBUG_MAX = 10;
 
 const MAX_CONVERSATION_TURNS = 8;
 interface ConversationState {
@@ -148,6 +150,14 @@ pool.on("error", (err) => {
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", message: "Eden shelter API is running" });
+});
+
+app.get("/api/voice/debug-gather", (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    hint: "Last gather webhooks from Twilio. If SpeechResult and Digits are empty when you spoke, Twilio STT may not be capturing.",
+    recent: gatherDebugLog,
+  });
 });
 
 app.get(["/api/voice/tts/:token", "/api/voice/tts/:token.mp3"], (req: Request, res: Response) => {
@@ -911,7 +921,7 @@ app.post("/api/test/call-me", async (req: Request, res: Response) => {
     if (twilioError) return res.status(400).json({ error: twilioError });
 
     const testScript =
-      "Hello, this is a test call from Eden. Say something and I'll respond. You can ask about shelter availability or anything else.";
+      "Hello, this is a test call from Eden. Say something and I'll respond. You can also press 1 for yes, 2 for no, or 9 for hold on.";
     const audioUrl = await createTtsAudioUrl(testScript);
 
     const baseUrl = getPublicBaseUrl();
@@ -992,21 +1002,39 @@ app.post("/webhooks/twilio/recording", (req: Request, res: Response) => {
   return res.status(200).json({ success: true });
 });
 
-/** Extract speech from Twilio webhook body. Twilio sends SpeechResult (final) or UnstableSpeechResult (partial). */
-function getSpeechFromGatherBody(body: Record<string, unknown>): string {
+/** Extract speech or DTMF from Twilio webhook body. Maps keypad: 1=yes, 2=no, 9=hold. */
+function getInputFromGatherBody(body: Record<string, unknown>): string {
   const keys = ["SpeechResult", "UnstableSpeechResult", "speechresult", "unstablespeechresult", "speech_result"];
   for (const k of keys) {
     const v = body[k];
     if (typeof v === "string" && v.trim().length > 0) return v.trim();
   }
+  const digits = String(body.Digits || body.digits || "").trim();
+  if (digits === "1") return "yes";
+  if (digits === "2") return "no";
+  if (digits === "9") return "hold on";
+  if (digits.length > 0) return digits;
   return "";
 }
 
 app.post("/webhooks/twilio/gather", async (req: Request, res: Response) => {
   const callSid = String(req.body.CallSid || req.body.call_sid || "");
   const callStatus = String(req.body.CallStatus || req.body.call_status || "").toLowerCase();
-  const speechResult = getSpeechFromGatherBody(req.body as Record<string, unknown>);
-  console.log("[gather]", "CallSid:", callSid?.slice(0, 12) + "...", "Speech:", speechResult || "(empty)", "Status:", callStatus || "-");
+  const speechResult = getInputFromGatherBody(req.body as Record<string, unknown>);
+  gatherDebugLog.push({
+    ts: new Date().toISOString(),
+    SpeechResult: String(req.body.SpeechResult ?? ""),
+    Digits: String(req.body.Digits ?? ""),
+    CallSid: callSid?.slice(0, 16),
+    CallStatus: callStatus,
+    keys: Object.keys(req.body),
+  });
+  if (gatherDebugLog.length > GATHER_DEBUG_MAX) gatherDebugLog.shift();
+
+  if (!speechResult) {
+    console.warn("[gather] No input captured", "CallSid:", callSid?.slice(0, 12), "| Body keys:", Object.keys(req.body).join(","), "| SpeechResult:", req.body.SpeechResult, "Digits:", req.body.Digits);
+  }
+  console.log("[gather]", "CallSid:", callSid?.slice(0, 12) + "...", "Input:", speechResult || "(empty)", "Status:", callStatus || "-");
 
   const jobIdFromQuery = String(req.query.job_id || "").trim();
   const attemptIdFromQuery = String(req.query.attempt_id || "").trim();
@@ -1117,7 +1145,7 @@ app.post("/webhooks/twilio/gather", async (req: Request, res: Response) => {
     const fallbackGatherUrl = nextGatherUrl?.replace(/[<>&'"]/g, "");
     if (fallbackGatherUrl) {
       return res.send(
-        `<Response><Gather input="speech" action="${fallbackGatherUrl}" method="POST" timeout="15" speechTimeout="5" speechModel="phone_call" enhanced="true" actionOnEmptyResult="true" language="en-US"><Say>${safeFallbackReply}</Say></Gather><Say>Still here. Could you say that again?</Say></Response>`
+        `<Response><Gather input="dtmf speech" action="${fallbackGatherUrl}" method="POST" timeout="20" speechTimeout="8" numDigits="1" speechModel="phone_call" enhanced="true" actionOnEmptyResult="true" language="en-US"><Say>${safeFallbackReply}</Say></Gather><Say>Still here. Could you say that again?</Say></Response>`
       );
     }
     return res.send(`<Response><Say>${safeFallbackReply}</Say><Hangup/></Response>`);
