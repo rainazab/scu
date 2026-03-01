@@ -65,18 +65,15 @@
         .step-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 16px 28px;
+          gap: 16px 48px;
           align-items: start;
+          background-image: linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.4));
+          background-size: 1px 100%;
+          background-position: center top;
+          background-repeat: no-repeat;
         }
-        #step2 .step-grid {
-          grid-template-columns: repeat(3, 1fr);
-          gap: 12px 20px;
-        }
-        #step2 .step-grid .span-full { grid-column: 1 / -1; }
-        #step2 .yn-row { grid-template-columns: repeat(3, 1fr); grid-column: 1 / -1; }
+        #step2 .yn-row { grid-template-columns: repeat(3, 1fr); grid-column: 1 / -1; align-items: start; }
         #step2 .yn-group { min-width: 0; }
-        #step2 .yn-group .row { display: flex; gap: 8px; margin-top: 6px; }
-        #step2 .yn-group .yn { flex: 1; min-height: 42px; }
         .step-grid .span-full { grid-column: 1 / -1; }
         .step-grid .row { grid-column: 1 / -1; }
         .step-grid .field-group { margin-top: 0; }
@@ -272,21 +269,14 @@
         #step1 .chips { grid-template-columns: repeat(2, 1fr); }
       }
       @media (min-width: 600px) {
-        #step2 .step-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 14px 20px;
-        }
-        #step2 .step-grid .span-full { grid-column: 1 / -1; }
         #step2 .yn-row {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 12px;
           grid-column: 1 / -1;
+          align-items: start;
         }
         #step2 .yn-group { min-width: 0; }
-        #step2 .yn-group .row { display: flex; gap: 8px; margin-top: 6px; }
-        #step2 .yn-group .yn { flex: 1; min-height: 42px; }
       }
       .chip {
         border: 1px solid rgba(255, 255, 255, 0.58);
@@ -360,6 +350,16 @@
       select option { background: rgba(255,255,255,0.95); color: #1a2d3d; }
       textarea { min-height: 88px; resize: vertical; }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .yn-btn-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .yn-btn-row .yn {
+        flex: 1;
+        max-width: 130px;
+        min-height: 42px;
+      }
       .yn {
         border: 1px solid rgba(255, 255, 255, 0.58);
         background: rgba(255, 255, 255, 0.42);
@@ -382,6 +382,11 @@
         outline-offset: 2px;
       }
       .yn.active { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+      select.populated, input.populated {
+        border-color: rgba(24, 88, 168, 0.5);
+        background: rgba(255, 255, 255, 0.75);
+        box-shadow: 0 0 0 2px rgba(24, 88, 168, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+      }
       .stepper { display: flex; align-items: center; gap: 14px; }
       .stepper button {
         min-height: 48px;
@@ -407,7 +412,7 @@
         font-size: 18px;
         font-weight: 600;
       }
-      .actions { margin-top: 24px; display: flex; gap: 12px; }
+      .actions { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
       .btn {
         border: none;
         border-radius: 14px;
@@ -752,34 +757,6 @@
                 <option value="50_plus">50+</option>
               </select>
             </div>
-            <div class="yn-row span-full">
-              <div class="yn-group">
-                <label id="childrenLabel">Do you have children with you?</label>
-                <div class="row">
-                  <button class="yn" data-field="children" data-val="true" id="childrenYes">Yes</button>
-                  <button class="yn" data-field="children" data-val="false" id="childrenNo">No</button>
-                </div>
-              </div>
-              <div class="yn-group">
-                <label id="pregnantLabel">Are you currently pregnant?</label>
-                <div class="row">
-                  <button class="yn" data-field="pregnant" data-val="yes" id="pregnantYes">Yes</button>
-                  <button class="yn" data-field="pregnant" data-val="no" id="pregnantNo">No</button>
-                </div>
-              </div>
-              <div class="yn-group">
-                <label id="petsLabel">Do you have pets?</label>
-                <div class="row">
-                  <button class="yn" data-field="pets" data-val="true" id="petsYes">Yes</button>
-                  <button class="yn" data-field="pets" data-val="false" id="petsNo">No</button>
-                </div>
-              </div>
-            </div>
-            <div id="childAgesGroup" class="field-group span-full hide">
-              <label id="childAgesLabel">Child ages (comma separated)</label>
-              <input id="childAges" placeholder="e.g. 2, 5, 11" />
-            </div>
-            <div id="pregnancyInfo" class="callout hide span-full">Some shelters prioritize beds for pregnant clients. Eden will include that in matching.</div>
             <div class="field-group">
               <label id="sobrietyLabel">Current sobriety status</label>
               <select id="sobriety">
@@ -787,6 +764,32 @@
                 <option value="clean_sober">Currently clean/sober</option>
                 <option value="not_currently_sober">Not currently sober</option>
               </select>
+            </div>
+            <div class="yn-group">
+              <label id="childrenLabel">Do you have children with you?</label>
+              <div class="yn-btn-row">
+                <button class="yn" data-field="children" data-val="true" id="childrenYes">Yes</button>
+                <button class="yn" data-field="children" data-val="false" id="childrenNo">No</button>
+              </div>
+            </div>
+            <div class="yn-group">
+              <label id="petsLabel">Do you have pets?</label>
+              <div class="yn-btn-row">
+                <button class="yn" data-field="pets" data-val="true" id="petsYes">Yes</button>
+                <button class="yn" data-field="pets" data-val="false" id="petsNo">No</button>
+              </div>
+            </div>
+            <div class="yn-group span-full" style="position: relative;">
+              <label id="pregnantLabel">Are you currently pregnant?</label>
+              <div class="yn-btn-row">
+                <button class="yn" data-field="pregnant" data-val="yes" id="pregnantYes">Yes</button>
+                <button class="yn" data-field="pregnant" data-val="no" id="pregnantNo">No</button>
+              </div>
+              <div id="pregnancyInfo" class="callout hide" style="position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 10;">Eden will prioritize shelters that accept pregnant clients.</div>
+            </div>
+            <div id="childAgesGroup" class="field-group span-full hide">
+              <label id="childAgesLabel">Child ages (comma separated)</label>
+              <input id="childAges" placeholder="e.g. 2, 5, 11" />
             </div>
             <div id="sobrietyInfo" class="callout hide span-full">Eden will avoid shelters with sobriety requirements when possible.</div>
           </div>
@@ -827,14 +830,14 @@
               <label id="altContactLabel">Alternate contact (trusted person, optional)</label>
               <input id="alternateContact" placeholder="Name + phone number" />
             </div>
-            <div class="field-group span-full">
-              <label id="locLabel" class="required">What city or neighborhood are you in?</label>
-              <input id="location" type="text" required placeholder="e.g. Mission District, SF" autocomplete="address-level2" />
-            </div>
-            <div class="field-group span-full">
-              <label id="notesLabel">Anything urgent we should know? (optional)</label>
-              <textarea id="notes" maxlength="200" placeholder="e.g. I need wheelchair access"></textarea>
-            </div>
+          </div>
+          <div class="field-group">
+            <label id="locLabel" class="required">What city or neighborhood are you in?</label>
+            <input id="location" type="text" required placeholder="e.g. Mission District, SF" autocomplete="address-level2" />
+          </div>
+          <div class="field-group">
+            <label id="notesLabel">Anything urgent we should know? (optional)</label>
+            <textarea id="notes" maxlength="200" placeholder="e.g. I need wheelchair access"></textarea>
           </div>
         </div>
         <div id="step4" class="hide">
@@ -843,7 +846,7 @@
           <p class="hint" id="resultNote">Results appear on this page when calls complete.</p>
         </div>
         <div class="actions">
-          <button id="backBtn" class="btn secondary hide">Back</button>
+          <button id="backBtn" class="btn secondary" style="visibility: hidden; pointer-events: none;">Back</button>
           <button id="nextBtn" class="btn primary">Next</button>
         </div>
         <div id="actionFeedback" class="feedback" aria-live="polite"></div>
@@ -915,7 +918,7 @@
           childrenLabel: "Do you have children with you?",
           childAgesLabel: "Child ages (comma separated)",
           pregnantLabel: "Are you currently pregnant?",
-          pregnancyInfo: "Some shelters prioritize beds for pregnant clients. Eden will include that in matching.",
+          pregnancyInfo: "Eden will prioritize shelters that accept pregnant clients.",
           sobrietyLabel: "Current sobriety status",
           sobrietyInfo: "Eden will avoid shelters with sobriety requirements when possible.",
           petsLabel: "Do you have pets?",
@@ -943,13 +946,10 @@
           requiredNeeds: "Please select at least one type of support.",
           requiredLocation: "Please enter your city or neighborhood.",
           chips: [
-            ["dv_specific", "Fleeing abuse or violence"],
-            ["immigrant", "Immigrant support - no status required"],
-            ["shelter", "Immediate shelter tonight"],
-            ["medical", "Medical support"],
-            ["mental_health", "Mental health support"],
-            ["children_support", "Family and children support"],
-            ["other", "Other urgent support"],
+            ["safety", "Safety / escape planning"],
+            ["shelter", "Finding a bed tonight"],
+            ["legal", "Legal & documentation help"],
+            ["emotional", "Emotional & crisis support"],
           ],
         },
         es: {
@@ -971,7 +971,7 @@
           childrenLabel: "¿Tienes niños contigo?",
           childAgesLabel: "Edades de los niños (separadas por coma)",
           pregnantLabel: "¿Estás embarazada actualmente?",
-          pregnancyInfo: "Algunos refugios priorizan camas para personas embarazadas. Eden lo incluirá en el filtro.",
+          pregnancyInfo: "Eden priorizará refugios que acepten clientes embarazadas.",
           sobrietyLabel: "Estado actual de sobriedad",
           sobrietyInfo: "Eden evitará refugios con requisito de sobriedad cuando sea posible.",
           petsLabel: "¿Tienes mascotas?",
@@ -999,13 +999,10 @@
           requiredNeeds: "Por favor selecciona al menos un tipo de apoyo.",
           requiredLocation: "Por favor ingresa tu ciudad o vecindario.",
           chips: [
-            ["dv_specific", "Huyendo de abuso o violencia"],
-            ["immigrant", "Apoyo para inmigrantes - sin estatus requerido"],
-            ["shelter", "Refugio inmediato esta noche"],
-            ["medical", "Apoyo médico"],
-            ["mental_health", "Apoyo de salud mental"],
-            ["children_support", "Apoyo para familias con niños"],
-            ["other", "Otro apoyo urgente"],
+            ["safety", "Planificación de seguridad / escape"],
+            ["shelter", "Encontrar una cama esta noche"],
+            ["legal", "Ayuda legal y de documentación"],
+            ["emotional", "Apoyo emocional y en crisis"],
           ],
         },
       };
@@ -1099,7 +1096,10 @@
         document.getElementById("step2").classList.toggle("hide", step !== 2);
         document.getElementById("step3").classList.toggle("hide", step !== 3);
         document.getElementById("step4").classList.toggle("hide", step !== 4);
-        document.getElementById("backBtn").classList.toggle("hide", step === 1);
+        const backBtn = document.getElementById("backBtn");
+        backBtn.style.visibility = step === 1 ? "hidden" : "visible";
+        backBtn.style.pointerEvents = step === 1 ? "none" : "";
+        document.getElementById("nextBtn").style.gridColumn = step === 1 ? "1 / -1" : "";
         document.querySelectorAll(".progress-dot").forEach((dot, i) => {
           dot.classList.toggle("filled", i + 1 <= step);
         });
@@ -1154,13 +1154,26 @@
       document.getElementById("location").addEventListener("focus", () => clearValidation());
       document.getElementById("genderIdentity").addEventListener("change", (e) => {
         state.gender_identity = e.target.value;
+        e.target.classList.add("populated");
       });
       document.getElementById("ageRange").addEventListener("change", (e) => {
         state.age_range = e.target.value;
+        e.target.classList.add("populated");
       });
       document.getElementById("sobriety").addEventListener("change", (e) => {
         state.sobriety = e.target.value;
+        e.target.classList.add("populated");
         updateCallouts();
+      });
+      ["preferredLanguage", "urgency", "accessibilityNeeds"].forEach((id) => {
+        document.getElementById(id).addEventListener("change", (e) => {
+          e.target.classList.add("populated");
+        });
+      });
+      ["alternateContact", "location", "childAges", "notes"].forEach((id) => {
+        document.getElementById(id).addEventListener("input", (e) => {
+          e.target.classList.toggle("populated", e.target.value.trim().length > 0);
+        });
       });
 
       function clearValidation() {
