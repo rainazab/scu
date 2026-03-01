@@ -179,6 +179,11 @@
         font-size: 12px;
         color: var(--muted);
       }
+      .feedback {
+        margin-top: 10px;
+        font-size: 13px;
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
@@ -245,6 +250,7 @@
           <button id="backBtn" class="btn secondary hide">Back</button>
           <button id="nextBtn" class="btn primary">Next</button>
         </div>
+        <div id="actionFeedback" class="feedback" aria-live="polite"></div>
       </div>
 
       <div id="statusView" class="card status hide">
@@ -298,6 +304,10 @@
           statusSub: "Please stay on this screen while we check availability.",
           noBeds: (n) => `We tried ${n} shelters. No beds tonight. Call 211 for free 24/7 help.`,
           found: "They're expecting you. Please call the shelter now.",
+          starting: "Starting search...",
+          startingTitle: "Starting shelter search...",
+          startingSub: "Connecting to Eden and preparing call attempts.",
+          startFailed: "Could not start search. Check your connection and try again.",
           safetyAlert: "If you are in immediate danger, call 911 now.",
           heroTitle: "You deserve to be safe tonight.",
           privacyPill: "No name required. No account created.",
@@ -336,6 +346,10 @@
           statusSub: "Quédate en esta pantalla mientras verificamos disponibilidad.",
           noBeds: (n) => `Intentamos ${n} refugios. No hay camas esta noche. Llama al 211.`,
           found: "Te están esperando. Llama al refugio ahora.",
+          starting: "Iniciando búsqueda...",
+          startingTitle: "Iniciando búsqueda de refugio...",
+          startingSub: "Conectando con Eden y preparando intentos de llamada.",
+          startFailed: "No se pudo iniciar la búsqueda. Verifica tu conexión e inténtalo de nuevo.",
           safetyAlert: "Si estás en peligro inmediato, llama al 911 ahora.",
           heroTitle: "Mereces estar a salvo esta noche.",
           privacyPill: "No se requiere nombre. No se crea cuenta.",
@@ -394,7 +408,20 @@
         document.getElementById("childrenNo").textContent = labels[lang].no;
         document.getElementById("petsYes").textContent = labels[lang].yes;
         document.getElementById("petsNo").textContent = labels[lang].no;
+        document.getElementById("actionFeedback").textContent = "";
         renderChips();
+      }
+
+      function setSubmitting(isSubmitting) {
+        document.getElementById("nextBtn").disabled = isSubmitting;
+        document.getElementById("backBtn").disabled = isSubmitting;
+        document.getElementById("langBtn").disabled = isSubmitting;
+        if (isSubmitting) {
+          document.getElementById("nextBtn").textContent = labels[lang].starting;
+          document.getElementById("actionFeedback").textContent = labels[lang].startingSub;
+        } else {
+          document.getElementById("nextBtn").textContent = step === 3 ? labels[lang].submit : labels[lang].next;
+        }
       }
 
       function setStep(n) {
@@ -462,21 +489,39 @@
       };
 
       async function submitIntake() {
-        const res = await fetch(`${API}/api/intake`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(state),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          alert(data.error || "Failed to start intake.");
-          return;
-        }
-        jobId = data.job_id;
-        document.getElementById("wizard").classList.add("hide");
+        setSubmitting(true);
         document.getElementById("statusView").classList.remove("hide");
-        pollTimer = setInterval(loadStatus, 3000);
-        loadStatus();
+        document.getElementById("statusTitle").textContent = labels[lang].startingTitle;
+        document.getElementById("statusSub").textContent = labels[lang].startingSub;
+        document.getElementById("log").innerHTML = `<div class="log-item">Eden received your request.</div>`;
+        document.getElementById("wizard").classList.add("hide");
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
+          const res = await fetch(`${API}/api/intake`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(state),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || "Failed to start intake.");
+          }
+          jobId = data.job_id;
+          document.getElementById("statusTitle").textContent = labels[lang].statusTitle;
+          document.getElementById("statusSub").textContent = labels[lang].statusSub;
+          pollTimer = setInterval(loadStatus, 3000);
+          loadStatus();
+        } catch (error) {
+          document.getElementById("statusView").classList.add("hide");
+          document.getElementById("wizard").classList.remove("hide");
+          document.getElementById("actionFeedback").textContent = labels[lang].startFailed;
+          alert(error instanceof Error ? error.message : labels[lang].startFailed);
+        } finally {
+          setSubmitting(false);
+        }
       }
 
       async function loadStatus() {
