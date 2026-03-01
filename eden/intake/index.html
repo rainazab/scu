@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Eden Intake</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
     <style>
       :root {
         --bg: #f5f7fb;
@@ -16,7 +17,7 @@
         --warn: #a76a00;
         --bad: #b42318;
       }
-      * { box-sizing: border-box; }
+      * { box-sizing: border-box; font-family: 'Inter', sans-serif; letter-spacing: 0.04em; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5); }
       body {
         margin: 0;
         background-image: url('matisMissionPeak.jpg');
@@ -25,7 +26,7 @@
         background-attachment: fixed;
         background-repeat: no-repeat;
         color: var(--text);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family: 'Inter', sans-serif;
       }
       .app {
         max-width: 480px;
@@ -85,13 +86,15 @@
         gap: 10px;
       }
       .chip {
-        border: 1px solid #cfdcff;
-        background: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.2);
         min-height: 48px;
         border-radius: 12px;
         padding: 10px 12px;
         text-align: left;
         font-size: 16px;
+        font-weight: 400;
+        color: #f4b8c8;
       }
       .chip.active {
         background: var(--primary-soft);
@@ -112,10 +115,12 @@
       textarea { min-height: 88px; resize: vertical; }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       .yn {
-        border: 1px solid #cfdcff;
-        background: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.2);
         min-height: 48px;
         border-radius: 12px;
+        font-weight: 400;
+        color: #f4b8c8;
       }
       .yn.active { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
       .stepper { display: flex; align-items: center; gap: 12px; }
