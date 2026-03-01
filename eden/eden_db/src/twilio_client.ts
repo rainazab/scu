@@ -95,12 +95,18 @@ export function buildShelterIntakeTwiml(context: {
   survivorContext: string;
   callbackNumber?: string;
   scriptText?: string;
+  audioUrl?: string;
 }): string {
   const safeContext = context.survivorContext.replace(/[<>&'"]/g, "");
   const safeScript = context.scriptText?.replace(/[<>&'"]/g, "");
   const callbackLine = context.callbackNumber
     ? ` Please call back ${context.callbackNumber} if disconnected.`
     : "";
+
+  if (context.audioUrl) {
+    const safeAudioUrl = context.audioUrl.replace(/[<>&'"]/g, "");
+    return ["<Response>", `<Play>${safeAudioUrl}</Play>`, "</Response>"].join("");
+  }
 
   if (safeScript) {
     return ["<Response>", `<Say voice="Polly.Joanna">${safeScript}</Say>`, "</Response>"].join("");

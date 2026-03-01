@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { Pool } from "pg";
+import { randomUUID } from "crypto";
 import { CallJobStore, CallMode, ShelterCallTarget } from "./call_jobs";
 import {
   buildConferenceJoinTwiml,
@@ -14,6 +15,7 @@ import { generateCallScript, parseTranscript } from "./ai_agent";
 import { WarmTransferMode, WarmTransferStore } from "./warm_transfer";
 import { SafetyControls } from "./safety_controls";
 import { PersistenceService } from "./persistence";
+import { synthesizeElevenLabsSpeech } from "./elevenlabs_client";
 
 dotenv.config();
 
@@ -41,6 +43,12 @@ const recordingCallbackUrl = process.env.NGROK_URL
   ? `${process.env.NGROK_URL.replace(/\/$/, "")}/webhooks/twilio/recording`
   : undefined;
 const dryRunMode = defaultCallMode === "dry_run";
+const elevenLabsConfig = {
+  apiKey: process.env.ELEVENLABS_API_KEY || "",
+  voiceId: process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL",
+  modelId: process.env.ELEVENLABS_MODEL_ID || "eleven_turbo_v2_5",
+};
+const elevenLabsEnabled = Boolean(elevenLabsConfig.apiKey);
 
 type IntakeNeed =
   | "shelter"
@@ -61,6 +69,33 @@ interface IntakeTracker {
 }
 
 const intakeTrackers = new Map<string, IntakeTracker>();
+const ttsRequestCache = new Map<string, { text: string; created_at_ms: number }>();
+
+function getPublicBaseUrl(): string | null {
+  if (process.env.NGROK_URL) return process.env.NGROK_URL.replace(/\/$/, "");
+  if (twilioConfig.statusCallbackUrl) {
+    try {
+      const url = new URL(twilioConfig.statusCallbackUrl);
+      return `${url.protocol}//${url.host}`;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function createTtsAudioUrl(text: string): string | null {
+  if (!elevenLabsEnabled) return null;
+  const base = getPublicBaseUrl();
+  if (!base) return null;
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  ttsRequestCache.forEach((value, key) => {
+    if (value.created_at_ms < cutoff) ttsRequestCache.delete(key);
+  });
+  const token = randomUUID();
+  ttsRequestCache.set(token, { text, created_at_ms: Date.now() });
+  return `${base}/api/voice/tts/${token}.mp3`;
+}
 
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
@@ -82,6 +117,32 @@ pool.on("error", (err) => {
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", message: "Eden shelter API is running" });
+});
+
+app.get("/api/voice/tts/:token.mp3", async (req: Request, res: Response) => {
+  if (!elevenLabsEnabled) {
+    return res.status(404).json({ error: "ElevenLabs TTS is not enabled." });
+  }
+  const token = String(req.params.token || "");
+  const cached = ttsRequestCache.get(token);
+  if (!cached) {
+    return res.status(404).json({ error: "TTS token not found or expired." });
+  }
+
+  // One-time use token for safer public access.
+  ttsRequestCache.delete(token);
+
+  try {
+    const audio = await synthesizeElevenLabsSpeech(elevenLabsConfig, cached.text);
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(200).send(audio);
+  } catch (error) {
+    return res.status(502).json({
+      error: "Failed to synthesize speech",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
 });
 
 app.get("/api/safety/config", (_req: Request, res: Response) => {
@@ -683,6 +744,7 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
           survivorContext,
           callbackNumber: anonymousMode ? undefined : callbackNumber,
           scriptText: scriptResult.script,
+          audioUrl: mode === "live" ? createTtsAudioUrl(scriptResult.script) || undefined : undefined,
         });
         const { sid } = await createTwilioCall(twilioConfig, {
           to: attempt.to_phone,
@@ -986,6 +1048,7 @@ app.post("/api/intake", async (req: Request, res: Response) => {
           survivorContext: survivorContextRaw,
           callbackNumber: undefined,
           scriptText: scriptResult.script,
+          audioUrl: defaultCallMode === "live" ? createTtsAudioUrl(scriptResult.script) || undefined : undefined,
         });
         const { sid } = await createTwilioCall(twilioConfig, {
           to: attempt.to_phone,
