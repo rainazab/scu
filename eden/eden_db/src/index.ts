@@ -84,10 +84,14 @@ function getPublicBaseUrl(): string | null {
   return null;
 }
 
-async function createTtsAudioUrl(text: string): Promise<string | null> {
-  if (!elevenLabsEnabled) return null;
+async function createTtsAudioUrl(text: string): Promise<string> {
+  if (!elevenLabsEnabled) {
+    throw new Error("ELEVENLABS_API_KEY is missing.");
+  }
   const base = getPublicBaseUrl();
-  if (!base) return null;
+  if (!base) {
+    throw new Error("NGROK_URL is missing or invalid.");
+  }
   const cutoff = Date.now() - 10 * 60 * 1000;
   ttsAudioCache.forEach((value, key) => {
     if (value.created_at_ms < cutoff) ttsAudioCache.delete(key);
@@ -98,8 +102,8 @@ async function createTtsAudioUrl(text: string): Promise<string | null> {
     ttsAudioCache.set(token, { audio, created_at_ms: Date.now() });
     return `${base}/api/voice/tts/${token}.mp3`;
   } catch (error) {
-    console.error("ElevenLabs synthesis failed for live call", error);
-    return null;
+    const message = error instanceof Error ? error.message : "Unknown ElevenLabs error";
+    throw new Error(`ElevenLabs synthesis failed: ${message}`);
   }
 }
 
@@ -768,13 +772,7 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
         survivorContext,
         callbackNumber: anonymousMode ? undefined : callbackNumber,
       });
-      const audioUrl =
-        mode === "live" ? (await createTtsAudioUrl(scriptResult.script)) || undefined : undefined;
-      if (mode === "live" && !audioUrl) {
-        throw new Error(
-          "Live call requires ElevenLabs audio. Check ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL_ID, and NGROK_URL."
-        );
-      }
+      const audioUrl = mode === "live" ? await createTtsAudioUrl(scriptResult.script) : undefined;
       callJobs.markAttempt(job.job_id, attempt.attempt_id, {
         generated_script: scriptResult.script,
         generated_script_source: scriptResult.source,
@@ -1136,15 +1134,7 @@ app.post("/api/intake", async (req: Request, res: Response) => {
             survivorContext: survivorContextRaw,
             callbackNumber: undefined,
           });
-          const audioUrl =
-            defaultCallMode === "live"
-              ? (await createTtsAudioUrl(scriptResult.script)) || undefined
-              : undefined;
-          if (defaultCallMode === "live" && !audioUrl) {
-            throw new Error(
-              "Live call requires ElevenLabs audio. Check ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL_ID, and NGROK_URL."
-            );
-          }
+          const audioUrl = defaultCallMode === "live" ? await createTtsAudioUrl(scriptResult.script) : undefined;
           callJobs.markAttempt(job.job_id, attempt.attempt_id, {
             generated_script: scriptResult.script,
             generated_script_source: scriptResult.source,
