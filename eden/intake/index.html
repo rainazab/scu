@@ -72,6 +72,7 @@
           gap: 24px;
           align-items: start;
         }
+        .card.status .status-body:has(#result.hide) .log-section { grid-column: 1 / -1; }
         .card.status .log { max-height: 280px; }
         .card.status .result-box { margin-top: 0; }
         .step1-top {
@@ -214,11 +215,12 @@
       p { margin: 0 0 14px; line-height: 1.5; }
       h1, h2, p, label, .progress, .small, .hint, strong {
         background:
-          linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.15)),
+          linear-gradient(rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.48)),
           url('matisMissionPeak.jpg') center / cover fixed;
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent !important;
+        text-shadow: 0 0 1px rgba(255, 255, 255, 0.25), 0 1px 3px rgba(0, 0, 0, 0.12);
       }
       #safetyModal h2, #safetyModal p, #safetyModal strong, #safetyModal button {
         background: none !important;
@@ -226,8 +228,14 @@
         background-clip: unset !important;
         color: #3a3a3a !important;
       }
+      .result-box h3, .result-box p, .result-box strong {
+        background: none !important;
+        -webkit-background-clip: unset !important;
+        background-clip: unset !important;
+        color: #1a2d3d !important;
+      }
       .chip, .yn, .lang, .btn {
-        color: #4a5e3a !important;
+        color: #3d5230 !important;
       }
       .chips {
         display: grid;
@@ -291,7 +299,7 @@
         min-height: 48px;
         padding: 12px 14px;
         font-size: 15px;
-        background: rgba(255, 255, 255, 0.28);
+        background: rgba(255, 255, 255, 0.38);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -303,7 +311,7 @@
         border-color: rgba(255, 255, 255, 0.7);
         box-shadow: 0 0 0 3px rgba(24, 88, 168, 0.15);
       }
-      input::placeholder, textarea::placeholder { color: rgba(26, 45, 61, 0.6); }
+      input::placeholder, textarea::placeholder { color: rgba(26, 45, 61, 0.7); }
       select option { background: rgba(255,255,255,0.95); color: #1a2d3d; }
       textarea { min-height: 88px; resize: vertical; }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -399,60 +407,123 @@
       }
       .status {
         text-align: center;
-        padding-top: 24px;
+        padding-top: 8px;
       }
+      .status-header {
+        margin-bottom: 24px;
+      }
+      .status-header h2 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+      .status-header p { margin: 0; font-size: 14px; color: var(--muted); }
       .pulse {
-        width: 80px;
-        height: 80px;
-        margin: 0 auto 20px;
+        width: 72px;
+        height: 72px;
+        margin: 0 auto 16px;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.35);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 2px solid rgba(24, 88, 168, 0.5);
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.28) 100%);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 0 0 2px rgba(24, 88, 168, 0.3);
         animation: pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .pulse-icon {
+        width: 28px;
+        height: 28px;
+        color: var(--primary);
+        opacity: 0.9;
+        animation: pulse-icon 2s ease-in-out infinite;
       }
       @keyframes pulse {
-        0%, 100% { transform: scale(0.98); opacity: 0.9; }
-        50% { transform: scale(1.04); opacity: 1; }
+        0%, 100% { transform: scale(0.98); opacity: 0.92; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 0 0 2px rgba(24, 88, 168, 0.3); }
+        50% { transform: scale(1.03); opacity: 1; box-shadow: 0 6px 28px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(24, 88, 168, 0.4); }
+      }
+      @keyframes pulse-icon {
+        0%, 100% { opacity: 0.75; transform: scale(0.95); }
+        50% { opacity: 1; transform: scale(1.05); }
+      }
+      .status-body { margin-top: 20px; }
+      .log-label {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 12px;
       }
       .log {
-        margin-top: 20px;
-        text-align: left;
-        max-height: 260px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-height: 280px;
         overflow: auto;
+      }
+      .log-item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px 12px;
+        align-items: center;
+        padding: 14px 16px;
         background: rgba(255, 255, 255, 0.28);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.5);
         border-radius: 14px;
-        padding: 12px;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-      }
-      .log-item {
-        padding: 10px 12px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.35);
-        font-size: 14px;
+        font-size: 15px;
         line-height: 1.4;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        transition: box-shadow 0.2s ease;
       }
-      .log-item:last-child { border-bottom: none; }
-      .tag { font-weight: 300; }
-      .tag.calling { color: var(--warn); }
-      .tag.failed { color: var(--bad); }
-      .tag.done { color: var(--ok); }
-      .result-box {
-        margin-top: 20px;
-        text-align: left;
+      .log-item.calling { border-color: rgba(24, 88, 168, 0.4); box-shadow: 0 2px 12px rgba(24, 88, 168, 0.1); }
+      .log-item-name { font-weight: 600; min-width: 0; }
+      .log-item-tag {
+        flex-shrink: 0;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 5px 10px;
+        border-radius: 999px;
         background: rgba(255, 255, 255, 0.35);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+      }
+      .log-item-tag.calling {
+        background: rgba(167, 106, 0, 0.2);
+        border-color: rgba(167, 106, 0, 0.4);
+        color: var(--warn);
+      }
+      .log-item-tag.failed {
+        background: rgba(180, 35, 24, 0.12);
+        border-color: rgba(180, 35, 24, 0.35);
+        color: var(--bad);
+      }
+      .log-item-tag.done {
+        background: rgba(13, 138, 82, 0.2);
+        border-color: rgba(13, 138, 82, 0.4);
+        color: var(--ok);
+      }
+      .log-item-reason {
+        grid-column: 1 / -1;
+        font-size: 12px;
+        color: var(--muted);
+        padding-top: 4px;
+        border-top: 1px solid rgba(255, 255, 255, 0.3);
+      }
+      .result-box {
+        margin-top: 0;
+        text-align: left;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.25) 100%);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
         border: 1px solid rgba(255, 255, 255, 0.5);
         border-radius: 16px;
         padding: 20px;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 8px 48px rgba(0, 0, 0, 0.04);
       }
       .result-box h3 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
+      .result-box.success h3 { color: var(--ok); }
+      .result-box.warn h3 { color: var(--warn); }
       .hide { display: none; }
       .small { font-size: 13px; color: var(--muted); }
       .hint {
@@ -723,11 +794,20 @@
       </div>
 
       <div id="statusView" class="card status hide">
-        <div class="pulse"></div>
-        <h2 id="statusTitle">Your agent is calling shelters now...</h2>
-        <p id="statusSub">Please stay on this screen while we check availability.</p>
+        <div class="status-header">
+          <div class="pulse">
+            <svg class="pulse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+          </div>
+          <h2 id="statusTitle">Your agent is calling shelters now...</h2>
+          <p id="statusSub">Please stay on this screen while we check availability.</p>
+        </div>
         <div class="status-body">
-          <div class="log" id="log"></div>
+          <div class="log-section">
+            <div class="log-label" id="logLabel">Shelter calls</div>
+            <div class="log" id="log"></div>
+          </div>
           <div id="result" class="result-box hide"></div>
         </div>
       </div>
@@ -1058,7 +1138,12 @@
         document.getElementById("statusView").classList.remove("hide");
         document.getElementById("statusTitle").textContent = labels[lang].startingTitle;
         document.getElementById("statusSub").textContent = labels[lang].startingSub;
-        document.getElementById("log").innerHTML = `<div class="log-item">Eden received your request.</div>`;
+        document.getElementById("log").innerHTML = `
+          <div class="log-item">
+            <div class="log-item-name">Eden received your request</div>
+            <span class="log-item-tag">Starting</span>
+          </div>
+        `;
         document.getElementById("wizard").classList.add("hide");
         try {
           const controller = new AbortController();
@@ -1108,26 +1193,34 @@
         log.innerHTML = "";
         data.attempts.forEach((a) => {
           const row = document.createElement("div");
-          row.className = "log-item";
-          const cls = a.status === "calling" ? "calling" : a.status === "failed" ? "failed" : a.status === "completed" ? "done" : "";
-          row.innerHTML = `<strong>${a.shelter_name}</strong><br><span class="tag ${cls}">${a.status}</span>${a.reason ? ` - ${a.reason}` : ""}`;
+          const statusClass = a.status === "calling" ? "calling" : a.status === "failed" ? "failed" : a.status === "completed" ? "done" : "";
+          row.className = `log-item ${statusClass}`;
+          const tagClass = `log-item-tag ${statusClass}`;
+          const tagText = a.status === "completed" ? "Completed" : a.status === "calling" ? "Calling…" : a.status;
+          row.innerHTML = `
+            <div class="log-item-name">${a.shelter_name}</div>
+            <span class="${tagClass}">${tagText}</span>
+            ${a.reason ? `<div class="log-item-reason">${a.reason}</div>` : ""}
+          `;
           log.appendChild(row);
         });
 
         if (data.result) {
           clearInterval(pollTimer);
           const box = document.getElementById("result");
+          box.className = "result-box success";
           box.classList.remove("hide");
           box.innerHTML = `
-            <h3 style="margin:0 0 8px;color:#1f9d5b;">Help Found</h3>
+            <h3>Help Found</h3>
             <p><strong>${data.result.shelter_name}</strong><br>${data.result.address || ""} ${data.result.city || ""}<br>${data.result.intake_phone || ""}</p>
             <p>${labels[lang].found}</p>
           `;
         } else if (data.status === "failed") {
           clearInterval(pollTimer);
           const box = document.getElementById("result");
+          box.className = "result-box warn";
           box.classList.remove("hide");
-          box.innerHTML = `<h3 style="margin:0 0 8px;color:#d97706;">No Immediate Bed</h3><p>${labels[lang].noBeds(data.attempts.length)}</p>`;
+          box.innerHTML = `<h3>No Immediate Bed</h3><p>${labels[lang].noBeds(data.attempts.length)}</p>`;
         }
       }
 

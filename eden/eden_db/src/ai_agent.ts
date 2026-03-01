@@ -238,14 +238,18 @@ function buildContextualFallback(userSpeech: string): ConversationalReplyResult 
   if (HAS_BEDS_PATTERNS.test(t)) {
     return { reply: "Thanks. What intake requirements do we need?", shouldEndCall: false };
   }
-  if (/(hold on|one moment|let me check|give me a sec|just a sec|hang on|let me transfer|transfer you)/i.test(t)) {
+  if (/(hold on|hold|wait|one moment|one sec|just a sec|give me a sec|hang on|let me check|let me transfer|transfer you|gimme a sec|sorry|hold up|sec|pause)/i.test(t)) {
     return { reply: "Sure, I'll hold.", shouldEndCall: false };
   }
-  if (/(who is this|who are you|who's calling)\s*\.?$/i.test(t) || (t.length < 6 && /^(hello|hi|yes|yeah|ok)$/i.test(t))) {
+  if (/(who is this|who are you|who's calling)\s*\.?$/i.test(t) || (t.length < 6 && /^(hello|hi|yes|yeah|ok|uh|um)$/i.test(t))) {
     return { reply: "This is Eden. I'm calling about bed availability for someone who needs shelter tonight. Do you have any beds?", shouldEndCall: false };
   }
-  // Don't loop: end call instead of asking again
-  return { reply: "Thanks for your time. We'll try other shelters. Goodbye.", shouldEndCall: true };
+  // Short or unclear speech (e.g. interrupt, partial) — stay on line, don't hang up
+  if (t.length <= 20 || /^(can you|could you|what was|repeat|sorry|excuse|uh|um)/i.test(t)) {
+    return { reply: "I'm still here. Do you have any beds available tonight?", shouldEndCall: false };
+  }
+  // Longer unclear reply — only end if we've tried several times (handled by repetition check in index)
+  return { reply: "Got it. Could you tell me about bed availability or intake? Or if you're full, I can look elsewhere.", shouldEndCall: false };
 }
 
 export async function generateConversationalReply(
@@ -260,7 +264,7 @@ export async function generateConversationalReply(
     const isAvailabilityRelated =
       NO_BEDS_PATTERNS.test(lastUser) ||
       HAS_BEDS_PATTERNS.test(lastUser) ||
-      /(waitlist|wait list|hold on|one moment|let me check|who is this|who are you)/i.test(lastUser);
+      /(waitlist|wait list|hold|hold on|wait|one moment|one sec|let me check|who is this|who are you)/i.test(lastUser);
     if (isAvailabilityRelated) {
       return { result: contextual, source: "fallback" };
     }
