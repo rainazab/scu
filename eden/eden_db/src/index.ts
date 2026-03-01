@@ -1018,55 +1018,58 @@ app.post("/api/intake", async (req: Request, res: Response) => {
       has_pets: hasPets,
     });
 
-    for (const attempt of job.attempts) {
-      if (!attempt.to_phone) {
-        callJobs.markAttempt(job.job_id, attempt.attempt_id, {
-          status: "failed",
-          error: "Shelter does not have intake_phone configured.",
-        });
-        persistCallJobState(job.job_id);
-        continue;
-      }
-      try {
-        const scriptResult = await generateCallScript({
-          shelterName: attempt.shelter_name,
-          survivorContext: survivorContextRaw,
-          callbackNumber: undefined,
-        });
-        callJobs.markAttempt(job.job_id, attempt.attempt_id, {
-          generated_script: scriptResult.script,
-        });
-
-        if (dryRunMode) {
-          callJobs.bindProviderSid(job.job_id, attempt.attempt_id, `DRYRUN-${attempt.attempt_id}`);
+    // Run call setup asynchronously so intake can respond immediately.
+    void (async () => {
+      for (const attempt of job.attempts) {
+        if (!attempt.to_phone) {
+          callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+            status: "failed",
+            error: "Shelter does not have intake_phone configured.",
+          });
           persistCallJobState(job.job_id);
           continue;
         }
+        try {
+          const scriptResult = await generateCallScript({
+            shelterName: attempt.shelter_name,
+            survivorContext: survivorContextRaw,
+            callbackNumber: undefined,
+          });
+          callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+            generated_script: scriptResult.script,
+          });
+          persistCallJobState(job.job_id);
 
-        const twiml = buildShelterIntakeTwiml({
-          shelterName: attempt.shelter_name,
-          survivorContext: survivorContextRaw,
-          callbackNumber: undefined,
-          scriptText: scriptResult.script,
-          audioUrl: defaultCallMode === "live" ? createTtsAudioUrl(scriptResult.script) || undefined : undefined,
-        });
-        const { sid } = await createTwilioCall(twilioConfig, {
-          to: attempt.to_phone,
-          twiml,
-          record: enableCallRecording,
-          recordingCallbackUrl,
-        });
-        callJobs.bindProviderSid(job.job_id, attempt.attempt_id, sid);
-        callJobs.markAttempt(job.job_id, attempt.attempt_id, { status: "initiated" });
-        persistCallJobState(job.job_id);
-      } catch (error) {
-        callJobs.markAttempt(job.job_id, attempt.attempt_id, {
-          status: "failed",
-          error: error instanceof Error ? error.message : "Unknown Twilio error",
-        });
-        persistCallJobState(job.job_id);
+          if (dryRunMode) {
+            callJobs.bindProviderSid(job.job_id, attempt.attempt_id, `DRYRUN-${attempt.attempt_id}`);
+            continue;
+          }
+
+          const twiml = buildShelterIntakeTwiml({
+            shelterName: attempt.shelter_name,
+            survivorContext: survivorContextRaw,
+            callbackNumber: undefined,
+            scriptText: scriptResult.script,
+            audioUrl: defaultCallMode === "live" ? createTtsAudioUrl(scriptResult.script) || undefined : undefined,
+          });
+          const { sid } = await createTwilioCall(twilioConfig, {
+            to: attempt.to_phone,
+            twiml,
+            record: enableCallRecording,
+            recordingCallbackUrl,
+          });
+          callJobs.bindProviderSid(job.job_id, attempt.attempt_id, sid);
+          callJobs.markAttempt(job.job_id, attempt.attempt_id, { status: "initiated" });
+          persistCallJobState(job.job_id);
+        } catch (error) {
+          callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+            status: "failed",
+            error: error instanceof Error ? error.message : "Unknown Twilio error",
+          });
+          persistCallJobState(job.job_id);
+        }
       }
-    }
+    })();
 
     return res.status(201).json({
       job_id: job.job_id,

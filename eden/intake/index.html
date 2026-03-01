@@ -497,7 +497,7 @@
         document.getElementById("wizard").classList.add("hide");
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 15000);
+          const timeoutId = setTimeout(() => controller.abort("request_timeout"), 15000);
           const res = await fetch(`${API}/api/intake`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -505,7 +505,13 @@
             signal: controller.signal,
           });
           clearTimeout(timeoutId);
-          const data = await res.json();
+          const text = await res.text();
+          let data = {};
+          try {
+            data = text ? JSON.parse(text) : {};
+          } catch {
+            data = { error: text || "Failed to start intake." };
+          }
           if (!res.ok) {
             throw new Error(data.error || "Failed to start intake.");
           }
@@ -518,7 +524,13 @@
           document.getElementById("statusView").classList.add("hide");
           document.getElementById("wizard").classList.remove("hide");
           document.getElementById("actionFeedback").textContent = labels[lang].startFailed;
-          alert(error instanceof Error ? error.message : labels[lang].startFailed);
+          const message =
+            error && typeof error === "object" && "name" in error && error.name === "AbortError"
+              ? "Request timed out. Please confirm the API is running and try again."
+              : error instanceof Error
+                ? error.message
+                : labels[lang].startFailed;
+          alert(message);
         } finally {
           setSubmitting(false);
         }
