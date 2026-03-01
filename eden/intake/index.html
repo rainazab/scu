@@ -19,13 +19,27 @@
       }
       * { box-sizing: border-box; font-family: 'Inter', sans-serif; letter-spacing: 0.04em; font-weight: 300; }
       html {
+        scroll-behavior: smooth;
         min-height: 100%;
+        background-color: #5a6b4e;
+      }
+      html::before {
+        content: '';
+        position: fixed;
+        inset: 0;
         background-image: url('matisMissionPeak.jpg');
         background-size: cover;
         background-position: center;
-        background-attachment: fixed;
         background-repeat: no-repeat;
-        background-color: #6b7c5e;
+        z-index: -2;
+      }
+      html::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.18) 100%);
+        z-index: -1;
+        pointer-events: none;
       }
       body {
         margin: 0;
@@ -115,10 +129,10 @@
         color: #e8c9d4;
       }
       .alert {
-        background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.45);
+        background: rgba(255, 255, 255, 0.45);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.6);
         border-radius: 14px;
         padding: 12px 16px;
         color: #a62d22;
@@ -126,19 +140,30 @@
         font-size: 14px;
         font-weight: 500;
         letter-spacing: 0.02em;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
       }
       .privacy-pill {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         font-size: 11px;
         letter-spacing: 0.06em;
-        background: rgba(255, 255, 255, 0.25);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.4);
+        font-weight: 500;
+        color: #1a2d3d;
+        background: rgba(255, 255, 255, 0.5);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.65);
         border-radius: 999px;
-        padding: 6px 14px;
+        padding: 7px 14px;
         margin-bottom: 12px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      }
+      .privacy-pill::before {
+        content: '✓';
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--ok);
       }
       .step1-hero h1 { margin-bottom: 12px; }
       .step1-hero h2 { margin: 20px 0 12px; font-size: 16px; font-weight: 600; }
@@ -146,13 +171,14 @@
       .step1-hero .row { margin-top: 10px; }
       .step1-chips label { margin-bottom: 10px; display: block; }
       .step1-safe-block {
-        background: rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.4);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
         border-radius: 14px;
         padding: 18px;
         margin-top: 12px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
       }
       .step1-safe-block .callout { margin-top: 14px; margin-bottom: 0; }
       .lang {
@@ -186,13 +212,13 @@
         z-index: -1;
       }
       .card {
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.25) 100%);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.52) 0%, rgba(255, 255, 255, 0.38) 100%);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.65);
         border-radius: 20px;
         padding: 24px;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 8px 48px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.5);
       }
       .progress-bar {
         display: flex;
@@ -201,13 +227,14 @@
       }
       .progress-dot {
         flex: 1;
-        height: 4px;
-        border-radius: 2px;
-        background: rgba(255, 255, 255, 0.35);
-        transition: background 0.25s ease, transform 0.2s ease;
+        height: 5px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.4);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       }
       .progress-dot.filled {
-        background: rgba(24, 88, 168, 0.6);
+        background: linear-gradient(90deg, rgba(24, 88, 168, 0.7), rgba(24, 88, 168, 0.85));
+        box-shadow: 0 0 8px rgba(24, 88, 168, 0.35);
       }
       .progress { font-size: 12px; color: var(--muted); margin-bottom: 20px; letter-spacing: 0.08em; text-transform: uppercase; }
       h1 { margin: 0 0 16px; font-size: 32px; line-height: 1.2; letter-spacing: 0.02em; font-weight: 600; }
@@ -215,12 +242,12 @@
       p { margin: 0 0 14px; line-height: 1.5; }
       h1, h2, p, label, .progress, .small, .hint, strong {
         background:
-          linear-gradient(rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.48)),
+          linear-gradient(rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0.55)),
           url('matisMissionPeak.jpg') center / cover fixed;
         -webkit-background-clip: text;
         background-clip: text;
         color: transparent !important;
-        text-shadow: 0 0 1px rgba(255, 255, 255, 0.25), 0 1px 3px rgba(0, 0, 0, 0.12);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
       }
       #safetyModal h2, #safetyModal p, #safetyModal strong, #safetyModal button {
         background: none !important;
@@ -262,10 +289,10 @@
         #step2 .yn-group .yn { flex: 1; min-height: 42px; }
       }
       .chip {
-        border: 1px solid rgba(255, 255, 255, 0.5);
-        background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.58);
+        background: rgba(255, 255, 255, 0.42);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         min-height: 48px;
         border-radius: 14px;
         padding: 12px 14px;
@@ -273,13 +300,13 @@
         font-size: 15px;
         font-weight: 400;
         color: inherit;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
         cursor: pointer;
       }
       .chip:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.5);
       }
       .chip:focus-visible {
         outline: 2px solid rgba(24, 88, 168, 0.5);
@@ -292,45 +319,63 @@
         font-weight: 300;
       }
       label { display: block; margin: 16px 0 8px; font-weight: 400; font-size: 15px; }
+      label.required::after {
+        content: ' *';
+        color: var(--primary);
+        font-weight: 600;
+      }
+      input.invalid, select.invalid, .field-group.invalid input, .field-group.invalid select {
+        border-color: rgba(180, 35, 24, 0.5);
+        box-shadow: 0 0 0 2px rgba(180, 35, 24, 0.15);
+      }
+      .validation-msg {
+        font-size: 13px;
+        color: var(--bad);
+        margin-top: 6px;
+      }
+      .step1-chips.invalid .chips {
+        box-shadow: 0 0 0 2px rgba(180, 35, 24, 0.35);
+        border-radius: 14px;
+      }
       input, textarea, select {
         width: 100%;
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.6);
         border-radius: 14px;
         min-height: 48px;
         padding: 12px 14px;
         font-size: 15px;
-        background: rgba(255, 255, 255, 0.38);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        background: rgba(255, 255, 255, 0.5);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.5);
         color: #1a2d3d;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
       }
       input:focus, textarea:focus, select:focus {
         outline: none;
-        border-color: rgba(255, 255, 255, 0.7);
-        box-shadow: 0 0 0 3px rgba(24, 88, 168, 0.15);
+        border-color: rgba(24, 88, 168, 0.5);
+        box-shadow: 0 0 0 3px rgba(24, 88, 168, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5);
       }
       input::placeholder, textarea::placeholder { color: rgba(26, 45, 61, 0.7); }
       select option { background: rgba(255,255,255,0.95); color: #1a2d3d; }
       textarea { min-height: 88px; resize: vertical; }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
       .yn {
-        border: 1px solid rgba(255, 255, 255, 0.5);
-        background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.58);
+        background: rgba(255, 255, 255, 0.42);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         min-height: 48px;
         border-radius: 14px;
         font-weight: 400;
         color: inherit;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
         cursor: pointer;
       }
       .yn:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.5);
       }
       .yn:focus-visible {
         outline: 2px solid rgba(24, 88, 168, 0.5);
@@ -341,20 +386,20 @@
       .stepper button {
         min-height: 48px;
         min-width: 56px;
-        border: 1px solid rgba(255, 255, 255, 0.5);
-        background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.58);
+        background: rgba(255, 255, 255, 0.42);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         border-radius: 14px;
         font-size: 20px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.5);
         color: inherit;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
         cursor: pointer;
       }
       .stepper button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.5);
       }
       .stepper #peopleCount {
         min-width: 48px;
@@ -371,39 +416,45 @@
         font-size: 16px;
         font-weight: 500;
         cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
       }
       .btn.secondary {
-        background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.5);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        background: rgba(255, 255, 255, 0.42);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.5);
         color: inherit;
       }
       .btn.secondary:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.5);
       }
       .btn.secondary:focus-visible {
         outline: 2px solid rgba(24, 88, 168, 0.5);
         outline-offset: 2px;
       }
       .btn.primary {
-        background: rgba(255, 255, 255, 0.35);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.55);
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.42) 100%);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 4px 20px rgba(24, 88, 168, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
         flex: 1;
       }
       .btn.primary:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 8px 28px rgba(24, 88, 168, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.6);
       }
       .btn.primary:focus-visible {
         outline: 2px solid rgba(24, 88, 168, 0.5);
         outline-offset: 2px;
+      }
+      .btn:active {
+        transform: translateY(0);
+      }
+      .chip:active, .yn:active {
+        transform: translateY(0);
       }
       .status {
         text-align: center;
@@ -419,10 +470,10 @@
         height: 72px;
         margin: 0 auto 16px;
         border-radius: 50%;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.28) 100%);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border: 1px solid rgba(255, 255, 255, 0.55);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.45) 100%);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.7);
         box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 0 0 2px rgba(24, 88, 168, 0.3);
         animation: pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
         display: flex;
@@ -465,15 +516,15 @@
         gap: 8px 12px;
         align-items: center;
         padding: 14px 16px;
-        background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.45);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.6);
         border-radius: 14px;
         font-size: 15px;
         line-height: 1.4;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-        transition: box-shadow 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+        transition: box-shadow 0.15s ease;
       }
       .log-item.calling { border-color: rgba(24, 88, 168, 0.4); box-shadow: 0 2px 12px rgba(24, 88, 168, 0.1); }
       .log-item-name { font-weight: 600; min-width: 0; }
@@ -513,13 +564,13 @@
       .result-box {
         margin-top: 0;
         text-align: left;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.25) 100%);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.42) 100%);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.65);
         border-radius: 16px;
         padding: 20px;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 8px 48px rgba(0, 0, 0, 0.04);
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.5);
       }
       .result-box h3 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
       .result-box.success h3 { color: var(--ok); }
@@ -536,15 +587,20 @@
         font-size: 13px;
         color: var(--muted);
       }
+      #actionFeedback.validation-error {
+        color: var(--bad);
+        font-weight: 500;
+      }
       .callout {
         margin-top: 12px;
         border-radius: 14px;
         padding: 12px 14px;
         font-size: 13px;
         line-height: 1.45;
-        border: 1px solid rgba(255, 255, 255, 0.5);
-        background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        background: rgba(255, 255, 255, 0.42);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(20px);
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
       }
@@ -660,7 +716,7 @@
               </div>
             </div>
             <div class="step1-chips">
-              <label id="needLabel">What support do you need first?</label>
+              <label id="needLabel" class="required">What support do you need first?</label>
               <div class="chips" id="needChips"></div>
             </div>
           </div>
@@ -669,7 +725,7 @@
           <h2 id="s2title">About your group</h2>
           <div class="step-grid">
             <div class="field-group">
-              <label id="peopleLabel">How many people need help?</label>
+              <label id="peopleLabel" class="required">How many people need help?</label>
               <div class="stepper">
                 <button id="minus">-</button>
                 <div id="peopleCount">1</div>
@@ -752,7 +808,7 @@
               </select>
             </div>
             <div class="field-group">
-              <label id="urgencyLabel">How urgently do you need shelter?</label>
+              <label id="urgencyLabel" class="required">How urgently do you need shelter?</label>
               <select id="urgency">
                 <option value="tonight">Tonight</option>
                 <option value="within_24h">Within 24 hours</option>
@@ -772,8 +828,8 @@
               <input id="alternateContact" placeholder="Name + phone number" />
             </div>
             <div class="field-group span-full">
-              <label id="locLabel">What city or neighborhood are you in?</label>
-              <input id="location" placeholder="e.g. Mission District, SF" />
+              <label id="locLabel" class="required">What city or neighborhood are you in?</label>
+              <input id="location" type="text" required placeholder="e.g. Mission District, SF" autocomplete="address-level2" />
             </div>
             <div class="field-group span-full">
               <label id="notesLabel">Anything urgent we should know? (optional)</label>
@@ -884,6 +940,8 @@
           privacyPill: "No name required. No account created.",
           yes: "Yes",
           no: "No",
+          requiredNeeds: "Please select at least one type of support.",
+          requiredLocation: "Please enter your city or neighborhood.",
           chips: [
             ["dv_specific", "Fleeing abuse or violence"],
             ["immigrant", "Immigrant support - no status required"],
@@ -938,6 +996,8 @@
           privacyPill: "No se requiere nombre. No se crea cuenta.",
           yes: "Sí",
           no: "No",
+          requiredNeeds: "Por favor selecciona al menos un tipo de apoyo.",
+          requiredLocation: "Por favor ingresa tu ciudad o vecindario.",
           chips: [
             ["dv_specific", "Huyendo de abuso o violencia"],
             ["immigrant", "Apoyo para inmigrantes - sin estatus requerido"],
@@ -960,6 +1020,7 @@
           btn.onclick = () => {
             if (state.needs.includes(key)) state.needs = state.needs.filter((n) => n !== key);
             else state.needs.push(key);
+            clearValidation();
             renderChips();
           };
           needChips.appendChild(btn);
@@ -1089,6 +1150,8 @@
         });
       });
 
+      document.getElementById("location").addEventListener("input", () => clearValidation());
+      document.getElementById("location").addEventListener("focus", () => clearValidation());
       document.getElementById("genderIdentity").addEventListener("change", (e) => {
         state.gender_identity = e.target.value;
       });
@@ -1100,9 +1163,51 @@
         updateCallouts();
       });
 
-      document.getElementById("backBtn").onclick = () => setStep(Math.max(1, step - 1));
+      function clearValidation() {
+        document.querySelectorAll(".invalid").forEach((el) => el.classList.remove("invalid"));
+        const fb = document.getElementById("actionFeedback");
+        fb.textContent = "";
+        fb.classList.remove("validation-error");
+      }
+      function validateStep() {
+        clearValidation();
+        if (step === 1) {
+          if (state.needs.length === 0) {
+            document.querySelector(".step1-chips")?.classList.add("invalid");
+            const fb = document.getElementById("actionFeedback");
+            fb.textContent = labels[lang].requiredNeeds;
+            fb.classList.add("validation-error");
+            fb.setAttribute("aria-live", "polite");
+            return false;
+          }
+        }
+        if (step === 2) {
+          if (state.people_count < 1) return false;
+        }
+        if (step === 3) {
+          const loc = document.getElementById("location").value.trim();
+          if (!loc) {
+            const locGroup = document.getElementById("location").closest(".field-group");
+            locGroup?.classList.add("invalid");
+            document.getElementById("location").classList.add("invalid");
+            document.getElementById("location").focus();
+            const fb = document.getElementById("actionFeedback");
+            fb.textContent = labels[lang].requiredLocation;
+            fb.classList.add("validation-error");
+            return false;
+          }
+        }
+        return true;
+      }
+      document.getElementById("backBtn").onclick = () => {
+        clearValidation();
+        setStep(Math.max(1, step - 1));
+      };
       document.getElementById("nextBtn").onclick = async () => {
-        if (step < 4) return setStep(step + 1);
+        if (step < 4) {
+          if (!validateStep()) return;
+          return setStep(step + 1);
+        }
         state.preferred_language = document.getElementById("preferredLanguage").value;
         state.urgency = document.getElementById("urgency").value;
         state.accessibility_needs = document.getElementById("accessibilityNeeds").value;
