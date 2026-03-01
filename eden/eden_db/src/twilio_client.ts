@@ -96,6 +96,8 @@ export function buildShelterIntakeTwiml(context: {
   callbackNumber?: string;
   scriptText?: string;
   audioUrl?: string;
+  /** When set with audioUrl, wraps Play in Gather for speech input; enables real-time conversation */
+  gatherActionUrl?: string;
 }): string {
   const safeContext = context.survivorContext.replace(/[<>&'"]/g, "");
   const safeScript = context.scriptText?.replace(/[<>&'"]/g, "");
@@ -114,6 +116,17 @@ export function buildShelterIntakeTwiml(context: {
 
   if (context.audioUrl) {
     const safeAudioUrl = context.audioUrl.replace(/[<>&'"]/g, "");
+    const safeGatherAction = context.gatherActionUrl?.replace(/[<>&'"]/g, "");
+    if (safeGatherAction) {
+      return [
+        "<Response>",
+        `<Gather input="speech" action="${safeGatherAction}" method="POST" timeout="15" speechTimeout="auto" hints="bed,beds,available,waitlist,intake,requirements,callback,full,capacity">`,
+        `<Play>${safeAudioUrl}</Play>`,
+        "</Gather>",
+        "<Say>We didn't receive a response. We'll follow up through our usual channels. Goodbye.</Say>",
+        "</Response>",
+      ].join("");
+    }
     return ["<Response>", `<Play>${safeAudioUrl}</Play>`, "</Response>"].join("");
   }
 
@@ -130,6 +143,30 @@ export function buildShelterIntakeTwiml(context: {
     "<Say>Please connect us with intake staff, or share voicemail instructions for immediate placement follow-up.</Say>",
     "</Response>",
   ].join("");
+}
+
+/** Builds TwiML for conversational follow-up. CRITICAL: <Play> must be INSIDE <Gather>
+ * so Twilio listens during AND after audio — otherwise speech is cut off. */
+export function buildConversationFollowUpTwiml(options: {
+  replyAudioUrl: string;
+  gatherActionUrl?: string;
+  shouldEndCall: boolean;
+}): string {
+  const safeUrl = options.replyAudioUrl.replace(/[<>&'"]/g, "");
+  const safeAction = options.gatherActionUrl?.replace(/[<>&'"]/g, "");
+  const parts = ["<Response>"];
+  if (options.shouldEndCall || !safeAction) {
+    parts.push(`<Play>${safeUrl}</Play>`, "<Hangup/>");
+  } else {
+    parts.push(
+      `<Gather input="speech" action="${safeAction}" method="POST" timeout="15" speechTimeout="auto" hints="bed,beds,available,waitlist,full,capacity,intake">`,
+      `<Play>${safeUrl}</Play>`,
+      "</Gather>",
+      "<Say>We didn't catch that. Goodbye.</Say>"
+    );
+  }
+  parts.push("</Response>");
+  return parts.join("");
 }
 
 export function buildConferenceJoinTwiml(conferenceName: string): string {

@@ -17,7 +17,7 @@ export interface ParsedTranscript {
 const MAX_SCRIPT_CHARS = 1400;
 
 interface OpenAIMessage {
-  role: "system" | "user";
+  role: "system" | "user" | "assistant";
   content: string;
 }
 
@@ -71,15 +71,13 @@ function buildFallbackScript(input: ScriptInput): string {
     : "If disconnected, we can call back through official shelter channels.";
 
   return [
-    `Hello, this is Eden coordinating urgent shelter placement. Is this intake staff for ${input.shelterName}?`,
-    `I have someone seeking safe housing now. Context: ${input.survivorContext}`,
-    "Could I quickly confirm:",
-    "First, do you have an available bed tonight?",
-    "Second, if no bed is open now, is there a waitlist or best callback time?",
-    "Third, what intake requirements should we prepare before arrival?",
-    "Fourth, can your site support child-safe placement if needed?",
+    `Hi, I'm Eden. I'm calling on behalf of someone who needs emergency shelter. Is this the intake line for ${input.shelterName}?`,
+    `I'm reaching out from a placement coordination service. We have a person seeking safe housing. Brief context: ${input.survivorContext}`,
+    "Can you tell me: do you have any beds available tonight?",
+    "If not, is there a waitlist or a good time for us to call back?",
+    "What intake requirements should we have ready before they arrive?",
     callbackLine,
-    "Thanks for your help. For immediate danger, callers are directed to 911.",
+    "Thank you. For immediate danger, people are directed to 911.",
   ].join("\n");
 }
 
@@ -180,22 +178,21 @@ export async function generateCallScript(input: ScriptInput): Promise<{ script: 
         role: "system",
         content:
           [
-            "You draft trauma-informed outbound shelter outreach scripts for live voice calls.",
-            "Write natural spoken language, not bullet lists, with 5-8 short lines.",
-            "Never use placeholders like [your name], [client], or bracket tokens.",
-            "Identify the caller as Eden and keep questions concise and practical.",
-            "Avoid legal/medical advice and avoid robotic wording.",
+            "Eden is a placement coordinator calling shelters ON BEHALF of a survivor seeking housing.",
+            "The person answering is the SHELTER's intake staff. Eden does NOT work at the shelter.",
+            "Draft a brief outbound call script: Eden introduces herself as calling on behalf of someone who needs shelter, asks if this is intake for [shelter], shares brief survivor context, and asks about availability and requirements.",
+            "Write natural spoken language, 5-8 short lines. No placeholders like [your name] or brackets.",
+            "Eden must never imply she works at or represents the shelter. She represents the survivor seeking help.",
             "Output plain script text only.",
           ].join(" "),
       },
       {
         role: "user",
         content: [
-          `Draft a call script for outreach to ${input.shelterName}.`,
-          `Context: ${input.survivorContext}.`,
+          `Draft script for Eden calling ${input.shelterName} on behalf of a survivor.`,
+          `Survivor context: ${input.survivorContext}.`,
           `Callback: ${input.callbackNumber || "none"}.`,
-          "Goal: verify immediate availability, intake requirements, and best next step.",
-          "Include one short safety line at the end.",
+          "Ask about bed availability, waitlist, and intake requirements. Include a brief safety line.",
         ].join(" "),
       },
     ]);
@@ -210,6 +207,96 @@ export async function generateCallScript(input: ScriptInput): Promise<{ script: 
       shelter: input.shelterName,
     });
     return { script: buildFallbackScript(input), source: "fallback" };
+  }
+}
+
+export interface ConversationalReplyInput {
+  shelterName: string;
+  survivorContext: string;
+  callbackNumber?: string;
+  conversationHistory: Array<{ role: "assistant" | "user"; content: string }>;
+}
+
+export interface ConversationalReplyResult {
+  reply: string;
+  shouldEndCall: boolean;
+}
+
+function buildContextualFallback(userSpeech: string): ConversationalReplyResult {
+  const t = userSpeech.toLowerCase().trim();
+  if (!t || t === "(no speech detected)") {
+    return { reply: "I didn't quite catch that. Could you repeat? Do you have any beds available tonight?", shouldEndCall: false };
+  }
+  if (/(full capacity|no beds|no availability|nothing available|all full|we're full|at capacity|no room)/.test(t)) {
+    return { reply: "I understand you're at full capacity. Thank you for letting us know. We'll look for other options. Goodbye.", shouldEndCall: true };
+  }
+  if (/(waitlist|wait list|wait-list)/.test(t)) {
+    return { reply: "Thanks, I'll note the waitlist. We'll follow up on next steps. Goodbye.", shouldEndCall: true };
+  }
+  if (/(available|have beds|can take|yes we have|we have \d+|couple of beds)/.test(t)) {
+    return { reply: "Great, thank you. What are the intake requirements we should prepare? I'll share that with the caller.", shouldEndCall: false };
+  }
+  if (/(hold on|one moment|let me check|give me a sec)/.test(t)) {
+    return { reply: "Sure, take your time. I'll hold.", shouldEndCall: false };
+  }
+  if (/(who is this|who are you|hello|hi|yes|yeah)\s*\.?$/.test(t) || t.length < 5) {
+    return { reply: "This is Eden calling on behalf of someone who needs shelter. I'm reaching out to see if you have any beds available tonight. Could you let me know?", shouldEndCall: false };
+  }
+  return { reply: "Got it. Could you tell me more about availability or intake requirements? Or if you're full, I can look elsewhere.", shouldEndCall: false };
+}
+
+export async function generateConversationalReply(
+  input: ConversationalReplyInput
+): Promise<{ result: ConversationalReplyResult; source: "fallback" | "openai" }> {
+  const genericFallback: ConversationalReplyResult = {
+    reply: "Thanks for that information. We'll follow up through our usual channels. Goodbye.",
+    shouldEndCall: true,
+  };
+
+  if (!aiEnabled()) {
+    const lastUser = input.conversationHistory.filter((t) => t.role === "user").pop()?.content || "";
+    const contextual = lastUser && lastUser !== "(no speech detected)" ? buildContextualFallback(lastUser) : genericFallback;
+    return { result: contextual, source: "fallback" };
+  }
+
+  const messages: OpenAIMessage[] = [
+    {
+      role: "system",
+      content: [
+        "You are Eden, a placement coordinator. You called the SHELTER (not the survivor) to ask about availability on behalf of someone seeking housing.",
+        `You called ${input.shelterName}. The person on the phone is SHELTER intake staff. Survivor context: ${input.survivorContext}. Callback: ${input.callbackNumber || "none"}.`,
+        "Respond naturally and briefly based on what the shelter staff just said. You represent the survivor, not the shelter.",
+        "Goal: confirm bed availability, intake requirements, waitlist info, or next steps.",
+        "Keep replies to 1-3 short sentences, conversational.",
+        "If they gave availability (beds, waitlist, requirements), thank them and wrap up.",
+        "If they asked you to repeat or seemed confused, briefly clarify.",
+        "NEVER use the generic phrase 'Thanks for that information we'll follow up through our usual channels.' Always acknowledge specifically what they said.",
+        "Output JSON only with keys: reply (string, what Eden says next), shouldEndCall (boolean, true if call is effectively complete).",
+      ].join(" "),
+    },
+    ...input.conversationHistory.map((t) => ({
+      role: t.role,
+      content: t.content,
+    })),
+  ];
+
+  try {
+    const text = await runOpenAI(messages);
+    const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    const parsed = JSON.parse(cleaned) as { reply?: string; shouldEndCall?: boolean };
+    const reply = typeof parsed.reply === "string" ? parsed.reply.trim().slice(0, 500) : "";
+    const shouldEndCall = Boolean(parsed.shouldEndCall);
+    const lastUser = input.conversationHistory.filter((t) => t.role === "user").pop()?.content || "";
+    const contextual = lastUser && lastUser !== "(no speech detected)" ? buildContextualFallback(lastUser) : genericFallback;
+    if (!reply) return { result: contextual, source: "fallback" };
+    return { result: { reply, shouldEndCall }, source: "openai" };
+  } catch (error) {
+    console.warn("OpenAI conversational reply failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    const lastUser = input.conversationHistory.filter((t) => t.role === "user").pop()?.content || "";
+    const contextual = lastUser && lastUser !== "(no speech detected)" ? buildContextualFallback(lastUser) : genericFallback;
+    return { result: contextual, source: "fallback" };
   }
 }
 

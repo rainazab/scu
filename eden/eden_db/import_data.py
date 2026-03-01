@@ -121,5 +121,5 @@ def import_csv_to_db(csv_file: str) -> None:
 
 if __name__ == "__main__":
     csv_file = "data/shelters_seed.csv"
-    import_csv_to_db(csv_file)
+    # import_csv_to_db(csv_file)  # Commented out for testing - use EDEN_TEST_SHELTER_PHONE instead
 

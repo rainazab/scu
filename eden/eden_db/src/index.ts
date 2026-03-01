@@ -6,12 +6,13 @@ import { randomUUID } from "crypto";
 import { CallJobStore, CallMode, ShelterCallTarget } from "./call_jobs";
 import {
   buildConferenceJoinTwiml,
+  buildConversationFollowUpTwiml,
   buildShelterIntakeTwiml,
   createTwilioCall,
   sendSms,
   TwilioConfig,
 } from "./twilio_client";
-import { generateCallScript, parseTranscript } from "./ai_agent";
+import { generateCallScript, generateConversationalReply, parseTranscript } from "./ai_agent";
 import { WarmTransferMode, WarmTransferStore } from "./warm_transfer";
 import { SafetyControls } from "./safety_controls";
 import { PersistenceService } from "./persistence";
@@ -43,6 +44,12 @@ const recordingCallbackUrl = process.env.NGROK_URL
   ? `${process.env.NGROK_URL.replace(/\/$/, "")}/webhooks/twilio/recording`
   : undefined;
 const dryRunMode = defaultCallMode === "dry_run";
+/** When set, all shelter calls go to this number instead (for testing). E.g. +14805483012 */
+const testShelterPhone = process.env.EDEN_TEST_SHELTER_PHONE?.trim() || undefined;
+function getCallDestination(attemptToPhone: string | null): string | null {
+  if (testShelterPhone) return testShelterPhone;
+  return attemptToPhone;
+}
 const elevenLabsConfig = {
   apiKey: process.env.ELEVENLABS_API_KEY || "",
   voiceId: process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL",
@@ -71,6 +78,20 @@ interface IntakeTracker {
 const intakeTrackers = new Map<string, IntakeTracker>();
 const ttsAudioCache = new Map<string, { audio: Buffer; created_at_ms: number }>();
 
+const MAX_CONVERSATION_TURNS = 15;
+interface ConversationState {
+  job_id: string;
+  attempt_id: string;
+  shelter_name: string;
+  survivor_context: string;
+  callback_number?: string;
+  initial_script: string;
+  turns: Array<{ role: "assistant" | "user"; content: string }>;
+}
+const conversationStore = new Map<string, ConversationState>();
+/** Test calls (from /api/test/call-me) are not linked to jobs; store initial script for gather fallback */
+const testCallContexts = new Map<string, { initial_script: string }>();
+
 function getPublicBaseUrl(): string | null {
   if (process.env.NGROK_URL) return process.env.NGROK_URL.replace(/\/$/, "");
   if (twilioConfig.statusCallbackUrl) {
@@ -92,7 +113,7 @@ async function createTtsAudioUrl(text: string): Promise<string> {
   if (!base) {
     throw new Error("NGROK_URL is missing or invalid.");
   }
-  const cutoff = Date.now() - 10 * 60 * 1000;
+  const cutoff = Date.now() - 30 * 60 * 1000;
   ttsAudioCache.forEach((value, key) => {
     if (value.created_at_ms < cutoff) ttsAudioCache.delete(key);
   });
@@ -129,11 +150,12 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", message: "Eden shelter API is running" });
 });
 
-app.get("/api/voice/tts/:token.mp3", async (req: Request, res: Response) => {
+app.get(["/api/voice/tts/:token", "/api/voice/tts/:token.mp3"], (req: Request, res: Response) => {
   if (!elevenLabsEnabled) {
     return res.status(404).json({ error: "ElevenLabs TTS is not enabled." });
   }
-  const token = String(req.params.token || "");
+  const raw = String((req.params as Record<string, string>).token ?? (req.params as Record<string, string>)["token.mp3"] ?? "");
+  const token = raw.replace(/\.mp3$/i, "");
   const cached = ttsAudioCache.get(token);
   if (!cached) {
     return res.status(404).json({ error: "TTS token not found or expired." });
@@ -780,7 +802,8 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
       });
       persistCallJobState(job.job_id);
 
-      if (!attempt.to_phone) {
+      const callDest = getCallDestination(attempt.to_phone);
+      if (!callDest) {
         callJobs.markAttempt(job.job_id, attempt.attempt_id, {
           status: "failed",
           error: "Shelter does not have intake_phone configured.",
@@ -788,7 +811,7 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
         persistCallJobState(job.job_id);
         continue;
       }
-      if (safetyControls.isBlockedNumber(attempt.to_phone)) {
+      if (!testShelterPhone && safetyControls.isBlockedNumber(attempt.to_phone!)) {
         callJobs.markAttempt(job.job_id, attempt.attempt_id, {
           status: "failed",
           error: "Destination number blocked by no-call-back safety policy.",
@@ -807,15 +830,20 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
       }
 
       try {
-          const twiml = buildShelterIntakeTwiml({
+        const baseUrl = getPublicBaseUrl();
+        const gatherActionUrl = baseUrl
+          ? `${baseUrl}/webhooks/twilio/gather?job_id=${encodeURIComponent(job.job_id)}&attempt_id=${encodeURIComponent(attempt.attempt_id)}`
+          : undefined;
+        const twiml = buildShelterIntakeTwiml({
           shelterName: attempt.shelter_name,
           survivorContext,
           callbackNumber: anonymousMode ? undefined : callbackNumber,
           scriptText: scriptResult.script,
-            audioUrl,
+          audioUrl,
+          gatherActionUrl,
         });
         const { sid } = await createTwilioCall(twilioConfig, {
-          to: attempt.to_phone,
+          to: callDest,
           twiml,
           record: enableCallRecording,
           recordingCallbackUrl,
@@ -876,21 +904,24 @@ app.post("/api/calls/script-preview", async (req: Request, res: Response) => {
 
 app.post("/api/test/call-me", async (req: Request, res: Response) => {
   try {
-    const rawTo = String(req.body?.to || "14805483012").trim().replace(/\D/g, "");
+    const rawTo = String(req.body?.to || "4805483012").trim().replace(/\D/g, "");
     const to = rawTo.startsWith("1") ? `+${rawTo}` : `+1${rawTo}`;
 
     const twilioError = ensureTwilioConfigured("live");
     if (twilioError) return res.status(400).json({ error: twilioError });
 
     const testScript =
-      "Hello, this is a test call from Eden. Your ElevenLabs voice is working. Thanks for testing.";
+      "Hello, this is a test call from Eden. Say something and I'll respond. You can ask about shelter availability or anything else.";
     const audioUrl = await createTtsAudioUrl(testScript);
 
+    const baseUrl = getPublicBaseUrl();
+    const gatherActionUrl = baseUrl ? `${baseUrl}/webhooks/twilio/gather` : undefined;
     const twiml = buildShelterIntakeTwiml({
       shelterName: "Test",
       survivorContext: "test",
       scriptText: testScript,
       audioUrl,
+      gatherActionUrl,
     });
 
     const { sid } = await createTwilioCall(twilioConfig, {
@@ -899,6 +930,7 @@ app.post("/api/test/call-me", async (req: Request, res: Response) => {
       record: enableCallRecording,
       recordingCallbackUrl,
     });
+    testCallContexts.set(sid, { initial_script: testScript });
 
     return res.status(200).json({ success: true, sid, to });
   } catch (error) {
@@ -930,6 +962,11 @@ app.post("/webhooks/twilio/status", (req: Request, res: Response) => {
   const status = String(req.body.CallStatus || "");
   if (!sid) return res.status(400).send("Missing CallSid");
 
+  if (isTerminalCallStatus(status)) {
+    conversationStore.delete(sid);
+    testCallContexts.delete(sid);
+  }
+
   const linked = callJobs.findByProviderSid(sid);
   if (!linked) return res.status(200).send("OK");
 
@@ -953,6 +990,123 @@ app.post("/webhooks/twilio/recording", (req: Request, res: Response) => {
   });
   persistCallJobState(linked.job.job_id);
   return res.status(200).json({ success: true });
+});
+
+app.post("/webhooks/twilio/gather", async (req: Request, res: Response) => {
+  const callSid = String(req.body.CallSid || "");
+  const speechResult = String(req.body.SpeechResult || req.body.UnstableSpeechResult || "").trim();
+  if (speechResult || callSid) console.log("[gather] SpeechResult:", speechResult || "(empty)", "CallSid:", callSid?.slice(0, 12) + "...");
+  const jobIdFromQuery = String(req.query.job_id || "").trim();
+  const attemptIdFromQuery = String(req.query.attempt_id || "").trim();
+
+  if (!callSid) {
+    res.type("text/xml");
+    return res.send("<Response><Hangup/></Response>");
+  }
+
+  let linked = callJobs.findByProviderSid(callSid);
+  if (!linked && jobIdFromQuery && attemptIdFromQuery) {
+    const jobFromDb = await persistence.getCallJob(jobIdFromQuery);
+    if (jobFromDb) {
+      const attempt = jobFromDb.attempts.find((a) => a.attempt_id === attemptIdFromQuery);
+      if (attempt) linked = { job: jobFromDb, attempt };
+    }
+  }
+  const testContext = testCallContexts.get(callSid);
+  const baseUrl = getPublicBaseUrl();
+  const buildGatherUrl = (jobId?: string, attemptId?: string) => {
+    if (!baseUrl) return undefined;
+    if (jobId && attemptId) {
+      return `${baseUrl}/webhooks/twilio/gather?job_id=${encodeURIComponent(jobId)}&attempt_id=${encodeURIComponent(attemptId)}`;
+    }
+    return `${baseUrl}/webhooks/twilio/gather`;
+  };
+  const gatherActionUrl = buildGatherUrl(linked?.job.job_id, linked?.attempt.attempt_id) ?? (baseUrl ? `${baseUrl}/webhooks/twilio/gather` : undefined);
+
+  let state = conversationStore.get(callSid);
+  if (!linked && !testContext) {
+    res.type("text/xml");
+    return res.send("<Response><Say>This call could not be continued. Goodbye.</Say><Hangup/></Response>");
+  }
+
+  if (!state) {
+    if (linked) {
+      const { job, attempt } = linked;
+      state = {
+        job_id: job.job_id,
+        attempt_id: attempt.attempt_id,
+        shelter_name: attempt.shelter_name,
+        survivor_context: job.request.survivor_context,
+        callback_number: job.request.callback_number,
+        initial_script: attempt.generated_script || "",
+        turns: [
+          { role: "assistant" as const, content: attempt.generated_script || "" },
+          { role: "user" as const, content: speechResult || "(no speech detected)" },
+        ],
+      };
+    } else {
+      const { initial_script } = testContext!;
+      state = {
+        job_id: "test",
+        attempt_id: "test",
+        shelter_name: "Test",
+        survivor_context: "test call",
+        callback_number: undefined,
+        initial_script,
+        turns: [
+          { role: "assistant" as const, content: initial_script },
+          { role: "user" as const, content: speechResult || "(no speech detected)" },
+        ],
+      };
+      testCallContexts.delete(callSid);
+    }
+    conversationStore.set(callSid, state);
+  } else {
+    state.turns.push({ role: "user" as const, content: speechResult || "(no speech detected)" });
+  }
+
+  const { result } = await generateConversationalReply({
+    shelterName: state.shelter_name,
+    survivorContext: state.survivor_context,
+    callbackNumber: state.callback_number,
+    conversationHistory: state.turns,
+  });
+
+  let shouldEndCall = result.shouldEndCall;
+  if (state.turns.filter((t) => t.role === "assistant").length >= MAX_CONVERSATION_TURNS) {
+    shouldEndCall = true;
+  }
+
+  state.turns.push({ role: "assistant", content: result.reply });
+
+  const nextGatherUrl = state.job_id !== "test" ? buildGatherUrl(state.job_id, state.attempt_id) : gatherActionUrl;
+  let replyAudioUrl: string;
+  try {
+    replyAudioUrl = await createTtsAudioUrl(result.reply);
+  } catch (err) {
+    console.error("TTS failed in gather webhook", err);
+    res.type("text/xml");
+    const safeFallbackReply = result.reply.replace(/[<>&'"]/g, "");
+    if (shouldEndCall) {
+      return res.send(`<Response><Say>${safeFallbackReply}</Say><Hangup/></Response>`);
+    }
+    const fallbackGatherUrl = nextGatherUrl?.replace(/[<>&'"]/g, "");
+    if (fallbackGatherUrl) {
+      return res.send(
+        `<Response><Gather input="speech" action="${fallbackGatherUrl}" method="POST" timeout="15" speechTimeout="auto"><Say>${safeFallbackReply}</Say></Gather><Say>We didn't catch that. Goodbye.</Say></Response>`
+      );
+    }
+    return res.send(`<Response><Say>${safeFallbackReply}</Say><Hangup/></Response>`);
+  }
+
+  const twiml = buildConversationFollowUpTwiml({
+    replyAudioUrl,
+    gatherActionUrl: shouldEndCall ? undefined : nextGatherUrl,
+    shouldEndCall,
+  });
+
+  res.type("text/xml");
+  return res.send(twiml);
 });
 
 app.post("/webhooks/twilio/transcript", (req: Request, res: Response) => {
@@ -1126,13 +1280,16 @@ app.post("/api/intake", async (req: Request, res: Response) => {
       preferred_language: preferredLanguage,
     });
 
-    const callTargets: ShelterCallTarget[] = matchedTargets.map((t) => ({
-      id: t.id,
-      shelter_name: t.shelter_name,
-      intake_phone: t.intake_phone,
-      city: t.city,
-      state: t.state,
-    }));
+    const maxCalls = Math.max(1, Math.min(5, parseInt(process.env.EDEN_MAX_CALLS_PER_INTAKE || "1", 10) || 1));
+    const callTargets: ShelterCallTarget[] = matchedTargets
+      .map((t) => ({
+        id: t.id,
+        shelter_name: t.shelter_name,
+        intake_phone: t.intake_phone,
+        city: t.city,
+        state: t.state,
+      }))
+      .slice(0, maxCalls);
 
     const job = callJobs.createJob({
       mode: defaultCallMode,
@@ -1155,7 +1312,8 @@ app.post("/api/intake", async (req: Request, res: Response) => {
     // Run call setup asynchronously so intake can respond immediately.
     void (async () => {
       for (const attempt of job.attempts) {
-        if (!attempt.to_phone) {
+        const callDest = getCallDestination(attempt.to_phone);
+        if (!callDest) {
           callJobs.markAttempt(job.job_id, attempt.attempt_id, {
             status: "failed",
             error: "Shelter does not have intake_phone configured.",
@@ -1181,15 +1339,20 @@ app.post("/api/intake", async (req: Request, res: Response) => {
             callJobs.bindProviderSid(job.job_id, attempt.attempt_id, `DRYRUN-${attempt.attempt_id}`);
             continue;
           }
+          const baseUrl = getPublicBaseUrl();
+          const gatherActionUrl = baseUrl
+            ? `${baseUrl}/webhooks/twilio/gather?job_id=${encodeURIComponent(job.job_id)}&attempt_id=${encodeURIComponent(attempt.attempt_id)}`
+            : undefined;
           const twiml = buildShelterIntakeTwiml({
             shelterName: attempt.shelter_name,
             survivorContext: survivorContextRaw,
             callbackNumber: undefined,
             scriptText: scriptResult.script,
             audioUrl,
+            gatherActionUrl,
           });
           const { sid } = await createTwilioCall(twilioConfig, {
-            to: attempt.to_phone,
+            to: callDest,
             twiml,
             record: enableCallRecording,
             recordingCallbackUrl,
@@ -1318,8 +1481,9 @@ app.post("/api/warm-transfers", async (req: Request, res: Response) => {
     if (!job) return res.status(404).json({ error: "Call job not found." });
     const attempt = job.attempts.find((a) => a.attempt_id === attemptId);
     if (!attempt) return res.status(404).json({ error: "Call attempt not found on this job." });
-    if (!attempt.to_phone) return res.status(400).json({ error: "Shelter attempt has no destination phone." });
-    if (safetyControls.isBlockedNumber(attempt.to_phone)) {
+    const shelterDest = getCallDestination(attempt.to_phone);
+    if (!shelterDest) return res.status(400).json({ error: "Shelter attempt has no destination phone." });
+    if (!testShelterPhone && attempt.to_phone && safetyControls.isBlockedNumber(attempt.to_phone)) {
       return res.status(403).json({ error: "Shelter destination number blocked by no-call-back safety policy." });
     }
 
@@ -1348,7 +1512,7 @@ app.post("/api/warm-transfers", async (req: Request, res: Response) => {
       job_id: jobId,
       attempt_id: attemptId,
       shelter_name: attempt.shelter_name,
-      shelter_phone: attempt.to_phone,
+      shelter_phone: shelterDest,
       survivor_phone: survivorPhone,
       survivor_name: anonymousMode ? undefined : survivorName,
       notes,
@@ -1378,7 +1542,7 @@ app.post("/api/warm-transfers", async (req: Request, res: Response) => {
           statusCallbackUrl: warmTransferStatusCallbackUrl,
         }),
         createTwilioCall(twilioConfig, {
-          to: attempt.to_phone,
+          to: shelterDest,
           twiml: conferenceTwiml,
           statusCallbackUrl: warmTransferStatusCallbackUrl,
         }),

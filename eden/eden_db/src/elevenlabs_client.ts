@@ -22,6 +22,7 @@ export async function synthesizeElevenLabsSpeech(
       voice_settings: {
         stability: 0.45,
         similarity_boost: 0.8,
+        speed: 1.15,
       },
     }),
   });

@@ -112,6 +112,50 @@ export class PersistenceService {
     );
   }
 
+  async getCallJob(job_id: string): Promise<CallJob | null> {
+    if (!this.enabled) return null;
+    const result = await this.pool.query(
+      `SELECT job_id, mode, status, created_at, updated_at,
+         survivor_context, callback_number, anonymous_mode, escalation_approved,
+         shelter_ids, attempts
+       FROM call_jobs WHERE job_id = $1`,
+      [job_id]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    const attempts = Array.isArray(row.attempts) ? row.attempts : (row.attempts && typeof row.attempts === "object" ? [row.attempts] : []);
+    return {
+      job_id: String(row.job_id),
+      mode: row.mode as CallJob["mode"],
+      status: row.status as CallJob["status"],
+      created_at: new Date(row.created_at).toISOString(),
+      updated_at: new Date(row.updated_at).toISOString(),
+      request: {
+        survivor_context: String(row.survivor_context),
+        callback_number: row.callback_number ? String(row.callback_number) : undefined,
+        anonymous_mode: Boolean(row.anonymous_mode),
+        escalation_approved: Boolean(row.escalation_approved),
+        shelter_ids: Array.isArray(row.shelter_ids) ? row.shelter_ids.map(Number) : [],
+      },
+      attempts: attempts.map((a: Record<string, unknown>) => ({
+        attempt_id: String(a.attempt_id ?? ""),
+        shelter_id: Number(a.shelter_id ?? 0),
+        shelter_name: String(a.shelter_name ?? ""),
+        to_phone: a.to_phone ? String(a.to_phone) : null,
+        status: (a.status as CallJob["attempts"][0]["status"]) ?? "queued",
+        generated_script: a.generated_script ? String(a.generated_script) : undefined,
+        generated_script_source: a.generated_script_source as "openai" | "fallback" | undefined,
+        voice_path: a.voice_path as "elevenlabs_play" | "twilio_say" | undefined,
+        provider_call_sid: a.provider_call_sid ? String(a.provider_call_sid) : undefined,
+        recording_url: a.recording_url ? String(a.recording_url) : undefined,
+        error: a.error ? String(a.error) : undefined,
+        transcript_excerpt: a.transcript_excerpt ? String(a.transcript_excerpt) : undefined,
+        parsed_transcript: a.parsed_transcript as CallJob["attempts"][0]["parsed_transcript"],
+        updated_at: (a.updated_at as string) ?? new Date().toISOString(),
+      })),
+    };
+  }
+
   async upsertWarmTransfer(transfer: WarmTransferSession): Promise<void> {
     if (!this.enabled) return;
     await this.pool.query(
