@@ -992,14 +992,30 @@ app.post("/webhooks/twilio/recording", (req: Request, res: Response) => {
   return res.status(200).json({ success: true });
 });
 
+/** Extract speech from Twilio webhook body. Twilio sends SpeechResult (final) or UnstableSpeechResult (partial). */
+function getSpeechFromGatherBody(body: Record<string, unknown>): string {
+  const keys = ["SpeechResult", "UnstableSpeechResult", "speechresult", "unstablespeechresult", "speech_result"];
+  for (const k of keys) {
+    const v = body[k];
+    if (typeof v === "string" && v.trim().length > 0) return v.trim();
+  }
+  return "";
+}
+
 app.post("/webhooks/twilio/gather", async (req: Request, res: Response) => {
-  const callSid = String(req.body.CallSid || "");
-  const speechResult = String(req.body.SpeechResult || req.body.UnstableSpeechResult || "").trim();
-  if (speechResult || callSid) console.log("[gather] SpeechResult:", speechResult || "(empty)", "CallSid:", callSid?.slice(0, 12) + "...");
+  const callSid = String(req.body.CallSid || req.body.call_sid || "");
+  const callStatus = String(req.body.CallStatus || req.body.call_status || "").toLowerCase();
+  const speechResult = getSpeechFromGatherBody(req.body as Record<string, unknown>);
+  console.log("[gather]", "CallSid:", callSid?.slice(0, 12) + "...", "Speech:", speechResult || "(empty)", "Status:", callStatus || "-");
+
   const jobIdFromQuery = String(req.query.job_id || "").trim();
   const attemptIdFromQuery = String(req.query.attempt_id || "").trim();
 
   if (!callSid) {
+    res.type("text/xml");
+    return res.send("<Response><Hangup/></Response>");
+  }
+  if (["completed", "canceled", "failed", "busy", "no-answer"].includes(callStatus)) {
     res.type("text/xml");
     return res.send("<Response><Hangup/></Response>");
   }
@@ -1101,7 +1117,7 @@ app.post("/webhooks/twilio/gather", async (req: Request, res: Response) => {
     const fallbackGatherUrl = nextGatherUrl?.replace(/[<>&'"]/g, "");
     if (fallbackGatherUrl) {
       return res.send(
-        `<Response><Gather input="speech" action="${fallbackGatherUrl}" method="POST" timeout="15" speechTimeout="auto" speechModel="phone_call" enhanced="true"><Say>${safeFallbackReply}</Say></Gather><Say>Still here. Could you say that again?</Say></Response>`
+        `<Response><Gather input="speech" action="${fallbackGatherUrl}" method="POST" timeout="15" speechTimeout="5" speechModel="phone_call" enhanced="true" actionOnEmptyResult="true" language="en-US"><Say>${safeFallbackReply}</Say></Gather><Say>Still here. Could you say that again?</Say></Response>`
       );
     }
     return res.send(`<Response><Say>${safeFallbackReply}</Say><Hangup/></Response>`);

@@ -238,6 +238,10 @@ function buildContextualFallback(userSpeech: string): ConversationalReplyResult 
   if (HAS_BEDS_PATTERNS.test(t)) {
     return { reply: "Thanks. What intake requirements do we need?", shouldEndCall: false };
   }
+  // Standalone affirmatives (yes/yeah/yep) in response to "do you have beds?" — treat as availability
+  if (/^(yes|yeah|yep|yup|uh huh|we do|correct|sure|absolutely)$/i.test(t)) {
+    return { reply: "Thanks. What intake requirements do we need?", shouldEndCall: false };
+  }
   if (/(hold on|hold|wait|one moment|one sec|just a sec|give me a sec|hang on|let me check|let me transfer|transfer you|gimme a sec|sorry|hold up|sec|pause)/i.test(t)) {
     return { reply: "Sure, I'll hold.", shouldEndCall: false };
   }
@@ -272,6 +276,7 @@ export async function generateConversationalReply(
   const isAvailabilitySignal =
     NO_BEDS_PATTERNS.test(lastUser) ||
     HAS_BEDS_PATTERNS.test(lastUser) ||
+    /^(yes|yeah|yep|yup|uh huh|we do|correct|sure|absolutely)$/i.test(lastUser.trim()) ||
     /(waitlist|wait list|hold|hold on|wait|one moment|one sec|let me check|who is this|who are you)/i.test(lastUser);
   if (isAvailabilitySignal) {
     return { result: buildContextualFallback(lastUser), source: "fallback" };
