@@ -14,7 +14,7 @@ export interface ParsedTranscript {
   summary: string;
 }
 
-const MAX_SCRIPT_CHARS = 1400;
+const MAX_SCRIPT_CHARS = 600;
 
 interface OpenAIMessage {
   role: "system" | "user" | "assistant";
@@ -66,19 +66,15 @@ function aiEnabled(): boolean {
 }
 
 function buildFallbackScript(input: ScriptInput): string {
-  const callbackLine = input.callbackNumber
-    ? `If disconnected, please return the call at ${input.callbackNumber}.`
-    : "If disconnected, we can call back through official shelter channels.";
-
-  return [
-    `Hi, I'm Eden. I'm calling on behalf of someone who needs emergency shelter. Is this the intake line for ${input.shelterName}?`,
-    `I'm reaching out from a placement coordination service. We have a person seeking safe housing. Brief context: ${input.survivorContext}`,
-    "Can you tell me: do you have any beds available tonight?",
-    "If not, is there a waitlist or a good time for us to call back?",
-    "What intake requirements should we have ready before they arrive?",
-    callbackLine,
-    "Thank you. For immediate danger, people are directed to 911.",
-  ].join("\n");
+  const lines = [
+    `Hi, this is Eden. I'm calling on behalf of someone who needs shelter tonight. Is this intake for ${input.shelterName}?`,
+    "Do you have any beds available? Or a waitlist?",
+  ];
+  if (input.callbackNumber) {
+    lines.push(`If we get disconnected, please call back at ${input.callbackNumber}.`);
+  }
+  lines.push("Thanks.");
+  return lines.join(" ");
 }
 
 function sanitizeScript(raw: string): string {
@@ -178,21 +174,19 @@ export async function generateCallScript(input: ScriptInput): Promise<{ script: 
         role: "system",
         content:
           [
-            "Eden is a placement coordinator calling shelters ON BEHALF of a survivor seeking housing.",
-            "The person answering is the SHELTER's intake staff. Eden does NOT work at the shelter.",
-            "Draft a brief outbound call script: Eden introduces herself as calling on behalf of someone who needs shelter, asks if this is intake for [shelter], shares brief survivor context, and asks about availability and requirements.",
-            "Write natural spoken language, 5-8 short lines. No placeholders like [your name] or brackets.",
-            "Eden must never imply she works at or represents the shelter. She represents the survivor seeking help.",
-            "Output plain script text only.",
+            "Eden is a placement coordinator calling shelters on behalf of a survivor seeking housing.",
+            "Draft a SHORT outbound call script: introduce yourself, ask if this is intake for [shelter], ask about beds and waitlist.",
+            "STRICT: 3-4 short sentences maximum. Under 60 words total. Get straight to the point. No lengthy context dumps.",
+            "No placeholders or brackets. Output plain script text only.",
           ].join(" "),
       },
       {
         role: "user",
         content: [
-          `Draft script for Eden calling ${input.shelterName} on behalf of a survivor.`,
-          `Survivor context: ${input.survivorContext}.`,
+          `Draft script for Eden calling ${input.shelterName}.`,
+          `Context: ${input.survivorContext.slice(0, 80)}.`,
           `Callback: ${input.callbackNumber || "none"}.`,
-          "Ask about bed availability, waitlist, and intake requirements. Include a brief safety line.",
+          "Keep it tight: who you are, intake line check, beds or waitlist. No long explanations.",
         ].join(" "),
       },
     ]);
@@ -222,40 +216,58 @@ export interface ConversationalReplyResult {
   shouldEndCall: boolean;
 }
 
+/** Patterns for "no beds / full capacity" - match liberally to avoid repeating the availability question */
+const NO_BEDS_PATTERNS =
+  /(full capacity|we're full|we are full|were full|at capacity|at full|no beds|no bed|no availability|nothing available|all full|no room|no space|we're at full|we are at full|right now.*full|currently.*full|all booked|fully booked|fully occupied|all filled|we don't have|don't have any|no space|no rooms|sadly no|unfortunately no|not right now|nothing right now|not tonight|no beds tonight|no availability tonight)/i;
+
+/** Patterns for "we have beds" */
+const HAS_BEDS_PATTERNS =
+  /(available|have beds|have a bed|can take|yes we have|we have \d+|couple of beds|we do have|we've got|a few beds|one or two)/i;
+
 function buildContextualFallback(userSpeech: string): ConversationalReplyResult {
   const t = userSpeech.toLowerCase().trim();
   if (!t || t === "(no speech detected)") {
-    return { reply: "I didn't quite catch that. Could you repeat? Do you have any beds available tonight?", shouldEndCall: false };
+    return { reply: "I didn't catch that. Do you have any beds available tonight?", shouldEndCall: false };
   }
-  if (/(full capacity|no beds|no availability|nothing available|all full|we're full|at capacity|no room)/.test(t)) {
-    return { reply: "I understand you're at full capacity. Thank you for letting us know. We'll look for other options. Goodbye.", shouldEndCall: true };
+  if (NO_BEDS_PATTERNS.test(t)) {
+    return { reply: "Got it, thanks. We'll try other shelters. Goodbye.", shouldEndCall: true };
   }
-  if (/(waitlist|wait list|wait-list)/.test(t)) {
-    return { reply: "Thanks, I'll note the waitlist. We'll follow up on next steps. Goodbye.", shouldEndCall: true };
+  if (/(waitlist|wait list|wait-list|on a wait)/i.test(t)) {
+    return { reply: "Thanks, I'll note the waitlist. Goodbye.", shouldEndCall: true };
   }
-  if (/(available|have beds|can take|yes we have|we have \d+|couple of beds)/.test(t)) {
-    return { reply: "Great, thank you. What are the intake requirements we should prepare? I'll share that with the caller.", shouldEndCall: false };
+  if (HAS_BEDS_PATTERNS.test(t)) {
+    return { reply: "Thanks. What intake requirements do we need?", shouldEndCall: false };
   }
-  if (/(hold on|one moment|let me check|give me a sec)/.test(t)) {
-    return { reply: "Sure, take your time. I'll hold.", shouldEndCall: false };
+  if (/(hold on|one moment|let me check|give me a sec|just a sec|hang on|let me transfer|transfer you)/i.test(t)) {
+    return { reply: "Sure, I'll hold.", shouldEndCall: false };
   }
-  if (/(who is this|who are you|hello|hi|yes|yeah)\s*\.?$/.test(t) || t.length < 5) {
-    return { reply: "This is Eden calling on behalf of someone who needs shelter. I'm reaching out to see if you have any beds available tonight. Could you let me know?", shouldEndCall: false };
+  if (/(who is this|who are you|who's calling)\s*\.?$/i.test(t) || (t.length < 6 && /^(hello|hi|yes|yeah|ok)$/i.test(t))) {
+    return { reply: "This is Eden. I'm calling about bed availability for someone who needs shelter tonight. Do you have any beds?", shouldEndCall: false };
   }
-  return { reply: "Got it. Could you tell me more about availability or intake requirements? Or if you're full, I can look elsewhere.", shouldEndCall: false };
+  // Don't loop: end call instead of asking again
+  return { reply: "Thanks for your time. We'll try other shelters. Goodbye.", shouldEndCall: true };
 }
 
 export async function generateConversationalReply(
   input: ConversationalReplyInput
 ): Promise<{ result: ConversationalReplyResult; source: "fallback" | "openai" }> {
-  const genericFallback: ConversationalReplyResult = {
-    reply: "Thanks for that information. We'll follow up through our usual channels. Goodbye.",
-    shouldEndCall: true,
-  };
+  const lastUser = input.conversationHistory.filter((t) => t.role === "user").pop()?.content || "";
+  const hasClearUserSpeech = lastUser && lastUser !== "(no speech detected)" && lastUser.length > 3;
+
+  // Prefer fast regex-based fallback for clear availability signals—avoids lag and repetition
+  if (hasClearUserSpeech) {
+    const contextual = buildContextualFallback(lastUser);
+    const isAvailabilityRelated =
+      NO_BEDS_PATTERNS.test(lastUser) ||
+      HAS_BEDS_PATTERNS.test(lastUser) ||
+      /(waitlist|wait list|hold on|one moment|let me check|who is this|who are you)/i.test(lastUser);
+    if (isAvailabilityRelated) {
+      return { result: contextual, source: "fallback" };
+    }
+  }
 
   if (!aiEnabled()) {
-    const lastUser = input.conversationHistory.filter((t) => t.role === "user").pop()?.content || "";
-    const contextual = lastUser && lastUser !== "(no speech detected)" ? buildContextualFallback(lastUser) : genericFallback;
+    const contextual = hasClearUserSpeech ? buildContextualFallback(lastUser) : { reply: "Thanks. We'll follow up. Goodbye.", shouldEndCall: true };
     return { result: contextual, source: "fallback" };
   }
 
@@ -263,15 +275,13 @@ export async function generateConversationalReply(
     {
       role: "system",
       content: [
-        "You are Eden, a placement coordinator. You called the SHELTER (not the survivor) to ask about availability on behalf of someone seeking housing.",
-        `You called ${input.shelterName}. The person on the phone is SHELTER intake staff. Survivor context: ${input.survivorContext}. Callback: ${input.callbackNumber || "none"}.`,
-        "Respond naturally and briefly based on what the shelter staff just said. You represent the survivor, not the shelter.",
-        "Goal: confirm bed availability, intake requirements, waitlist info, or next steps.",
-        "Keep replies to 1-3 short sentences, conversational.",
-        "If they gave availability (beds, waitlist, requirements), thank them and wrap up.",
-        "If they asked you to repeat or seemed confused, briefly clarify.",
-        "NEVER use the generic phrase 'Thanks for that information we'll follow up through our usual channels.' Always acknowledge specifically what they said.",
-        "Output JSON only with keys: reply (string, what Eden says next), shouldEndCall (boolean, true if call is effectively complete).",
+        "You are Eden, a placement coordinator. You called a shelter to ask about bed availability on behalf of someone seeking housing.",
+        `Shelter: ${input.shelterName}. Survivor context: ${input.survivorContext}.`,
+        "Rules: Keep replies to 1-2 SHORT sentences. Get to the point.",
+        "If they said NO beds / full capacity / waitlist only: thank them briefly and set shouldEndCall true. Do NOT ask about availability again.",
+        "If they said they HAVE beds: ask about intake requirements, shouldEndCall false.",
+        "If they asked to hold/transfer: say you'll hold, shouldEndCall false.",
+        "Output JSON only: { reply: string, shouldEndCall: boolean }.",
       ].join(" "),
     },
     ...input.conversationHistory.map((t) => ({
@@ -287,7 +297,7 @@ export async function generateConversationalReply(
     const reply = typeof parsed.reply === "string" ? parsed.reply.trim().slice(0, 500) : "";
     const shouldEndCall = Boolean(parsed.shouldEndCall);
     const lastUser = input.conversationHistory.filter((t) => t.role === "user").pop()?.content || "";
-    const contextual = lastUser && lastUser !== "(no speech detected)" ? buildContextualFallback(lastUser) : genericFallback;
+    const contextual = lastUser && lastUser !== "(no speech detected)" ? buildContextualFallback(lastUser) : { reply: "Thanks. We'll follow up. Goodbye.", shouldEndCall: true };
     if (!reply) return { result: contextual, source: "fallback" };
     return { result: { reply, shouldEndCall }, source: "openai" };
   } catch (error) {
@@ -295,7 +305,7 @@ export async function generateConversationalReply(
       message: error instanceof Error ? error.message : "unknown",
     });
     const lastUser = input.conversationHistory.filter((t) => t.role === "user").pop()?.content || "";
-    const contextual = lastUser && lastUser !== "(no speech detected)" ? buildContextualFallback(lastUser) : genericFallback;
+    const contextual = lastUser && lastUser !== "(no speech detected)" ? buildContextualFallback(lastUser) : { reply: "Thanks. We'll follow up. Goodbye.", shouldEndCall: true };
     return { result: contextual, source: "fallback" };
   }
 }

@@ -40,6 +40,56 @@
         min-height: 100vh;
         padding: 20px 24px;
       }
+      @media (min-width: 900px) {
+        .app {
+          max-width: 900px;
+          padding: 24px 32px;
+        }
+        .chips {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .step-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px 28px;
+          align-items: start;
+        }
+        #step2 .step-grid {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px 20px;
+        }
+        #step2 .step-grid .span-full { grid-column: 1 / -1; }
+        #step2 .yn-row { grid-template-columns: repeat(3, 1fr); grid-column: 1 / -1; }
+        #step2 .yn-group { min-width: 0; }
+        #step2 .yn-group .row { display: flex; gap: 8px; margin-top: 6px; }
+        #step2 .yn-group .yn { flex: 1; min-height: 42px; }
+        .step-grid .span-full { grid-column: 1 / -1; }
+        .step-grid .row { grid-column: 1 / -1; }
+        .step-grid .field-group { margin-top: 0; }
+        .card.status .status-body {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+          align-items: start;
+        }
+        .card.status .log { max-height: 280px; }
+        .card.status .result-box { margin-top: 0; }
+        .step1-top {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 32px;
+          align-items: start;
+        }
+        .step1-hero { padding-right: 8px; }
+        .step1-chips {
+          padding-left: 24px;
+          border-left: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        .step1-chips .chips { margin-top: 8px; }
+      }
+      @media (min-width: 1200px) {
+        .app { max-width: 960px; }
+      }
       .top {
         display: flex;
         justify-content: space-between;
@@ -87,8 +137,23 @@
         border: 1px solid rgba(255, 255, 255, 0.4);
         border-radius: 999px;
         padding: 6px 14px;
-        margin-bottom: 16px;
+        margin-bottom: 12px;
       }
+      .step1-hero h1 { margin-bottom: 12px; }
+      .step1-hero h2 { margin: 20px 0 12px; font-size: 16px; font-weight: 600; }
+      .step1-hero label { margin-top: 0; }
+      .step1-hero .row { margin-top: 10px; }
+      .step1-chips label { margin-bottom: 10px; display: block; }
+      .step1-safe-block {
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-radius: 14px;
+        padding: 18px;
+        margin-top: 12px;
+      }
+      .step1-safe-block .callout { margin-top: 14px; margin-bottom: 0; }
       .lang {
         border: none;
         background: linear-gradient(rgba(0,0,0,0.15), rgba(0,0,0,0.15)), url('matisMissionPeak.jpg') center / cover fixed;
@@ -166,7 +231,27 @@
       }
       .chips {
         display: grid;
-        gap: 12px;
+        gap: 10px;
+      }
+      @media (min-width: 480px) {
+        #step1 .chips { grid-template-columns: repeat(2, 1fr); }
+      }
+      @media (min-width: 600px) {
+        #step2 .step-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px 20px;
+        }
+        #step2 .step-grid .span-full { grid-column: 1 / -1; }
+        #step2 .yn-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          grid-column: 1 / -1;
+        }
+        #step2 .yn-group { min-width: 0; }
+        #step2 .yn-group .row { display: flex; gap: 8px; margin-top: 6px; }
+        #step2 .yn-group .yn { flex: 1; min-height: 42px; }
       }
       .chip {
         border: 1px solid rgba(255, 255, 255, 0.5);
@@ -489,105 +574,141 @@
         </div>
         <div class="progress" id="progress">Step 1 of 4</div>
         <div id="step1">
-          <div class="privacy-pill" id="privacyPill">No name required. No account created.</div>
-          <h1 id="heroTitle">You deserve to be safe tonight.</h1>
-          <h2 id="s1title">Situation right now</h2>
-          <label id="safeNowLabel">Are you currently in a safe place?</label>
-          <div class="row">
-            <button class="yn" data-field="safeNow" data-val="true" id="safeNowYes">Yes</button>
-            <button class="yn" data-field="safeNow" data-val="false" id="safeNowNo">No</button>
+          <div class="step1-top">
+            <div class="step1-hero">
+              <div class="privacy-pill" id="privacyPill">No name required. No account created.</div>
+              <h1 id="heroTitle">You deserve to be safe tonight.</h1>
+              <h2 id="s1title">Situation right now</h2>
+              <div class="step1-safe-block">
+                <label id="safeNowLabel">Are you currently in a safe place?</label>
+                <div class="row">
+                  <button class="yn" data-field="safeNow" data-val="true" id="safeNowYes">Yes</button>
+                  <button class="yn" data-field="safeNow" data-val="false" id="safeNowNo">No</button>
+                </div>
+                <div id="safeNowWarning" class="callout warn hide">If you are not currently safe, call 911 first before continuing.</div>
+              </div>
+            </div>
+            <div class="step1-chips">
+              <label id="needLabel">What support do you need first?</label>
+              <div class="chips" id="needChips"></div>
+            </div>
           </div>
-          <div id="safeNowWarning" class="callout warn hide">If you are not currently safe, call 911 first before continuing.</div>
-          <label id="needLabel">What support do you need first?</label>
-          <div class="chips" id="needChips"></div>
         </div>
         <div id="step2" class="hide">
           <h2 id="s2title">About your group</h2>
-          <label id="peopleLabel">How many people need help?</label>
-          <div class="stepper">
-            <button id="minus">-</button>
-            <div id="peopleCount">1</div>
-            <button id="plus">+</button>
-          </div>
-          <div class="field-group">
-            <label id="genderLabel">Gender identity</label>
-            <select id="genderIdentity">
-              <option value="woman">Woman</option>
-              <option value="man">Man</option>
-              <option value="nonbinary">Non-binary</option>
-              <option value="trans_woman">Trans woman</option>
-              <option value="trans_man">Trans man</option>
-              <option value="prefer_not">Prefer not to say</option>
-            </select>
-          </div>
-          <div class="field-group">
-            <label id="ageRangeLabel">Age range</label>
-            <select id="ageRange">
-              <option value="18_24">18-24</option>
-              <option value="25_34">25-34</option>
-              <option value="35_49">35-49</option>
-              <option value="50_plus">50+</option>
-            </select>
-          </div>
-          <label id="childrenLabel">Do you have children with you?</label>
-          <div class="row">
-            <button class="yn" data-field="children" data-val="true" id="childrenYes">Yes</button>
-            <button class="yn" data-field="children" data-val="false" id="childrenNo">No</button>
-          </div>
-          <div id="childAgesGroup" class="field-group hide">
-            <label id="childAgesLabel">Child ages (comma separated)</label>
-            <input id="childAges" placeholder="e.g. 2, 5, 11" />
-          </div>
-          <label id="pregnantLabel">Are you currently pregnant?</label>
-          <div class="row">
-            <button class="yn" data-field="pregnant" data-val="yes" id="pregnantYes">Yes</button>
-            <button class="yn" data-field="pregnant" data-val="no" id="pregnantNo">No</button>
-          </div>
-          <div id="pregnancyInfo" class="callout hide">Some shelters prioritize beds for pregnant clients. Eden will include that in matching.</div>
-          <label id="sobrietyLabel">Current sobriety status</label>
-          <select id="sobriety">
-            <option value="unknown">Prefer not to say</option>
-            <option value="clean_sober">Currently clean/sober</option>
-            <option value="not_currently_sober">Not currently sober</option>
-          </select>
-          <div id="sobrietyInfo" class="callout hide">Eden will avoid shelters with sobriety requirements when possible.</div>
-          <label id="petsLabel">Do you have pets?</label>
-          <div class="row">
-            <button class="yn" data-field="pets" data-val="true" id="petsYes">Yes</button>
-            <button class="yn" data-field="pets" data-val="false" id="petsNo">No</button>
+          <div class="step-grid">
+            <div class="field-group">
+              <label id="peopleLabel">How many people need help?</label>
+              <div class="stepper">
+                <button id="minus">-</button>
+                <div id="peopleCount">1</div>
+                <button id="plus">+</button>
+              </div>
+            </div>
+            <div class="field-group">
+              <label id="genderLabel">Gender identity</label>
+              <select id="genderIdentity">
+                <option value="woman">Woman</option>
+                <option value="man">Man</option>
+                <option value="nonbinary">Non-binary</option>
+                <option value="trans_woman">Trans woman</option>
+                <option value="trans_man">Trans man</option>
+                <option value="prefer_not">Prefer not to say</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label id="ageRangeLabel">Age range</label>
+              <select id="ageRange">
+                <option value="18_24">18-24</option>
+                <option value="25_34">25-34</option>
+                <option value="35_49">35-49</option>
+                <option value="50_plus">50+</option>
+              </select>
+            </div>
+            <div class="yn-row span-full">
+              <div class="yn-group">
+                <label id="childrenLabel">Do you have children with you?</label>
+                <div class="row">
+                  <button class="yn" data-field="children" data-val="true" id="childrenYes">Yes</button>
+                  <button class="yn" data-field="children" data-val="false" id="childrenNo">No</button>
+                </div>
+              </div>
+              <div class="yn-group">
+                <label id="pregnantLabel">Are you currently pregnant?</label>
+                <div class="row">
+                  <button class="yn" data-field="pregnant" data-val="yes" id="pregnantYes">Yes</button>
+                  <button class="yn" data-field="pregnant" data-val="no" id="pregnantNo">No</button>
+                </div>
+              </div>
+              <div class="yn-group">
+                <label id="petsLabel">Do you have pets?</label>
+                <div class="row">
+                  <button class="yn" data-field="pets" data-val="true" id="petsYes">Yes</button>
+                  <button class="yn" data-field="pets" data-val="false" id="petsNo">No</button>
+                </div>
+              </div>
+            </div>
+            <div id="childAgesGroup" class="field-group span-full hide">
+              <label id="childAgesLabel">Child ages (comma separated)</label>
+              <input id="childAges" placeholder="e.g. 2, 5, 11" />
+            </div>
+            <div id="pregnancyInfo" class="callout hide span-full">Some shelters prioritize beds for pregnant clients. Eden will include that in matching.</div>
+            <div class="field-group">
+              <label id="sobrietyLabel">Current sobriety status</label>
+              <select id="sobriety">
+                <option value="unknown">Prefer not to say</option>
+                <option value="clean_sober">Currently clean/sober</option>
+                <option value="not_currently_sober">Not currently sober</option>
+              </select>
+            </div>
+            <div id="sobrietyInfo" class="callout hide span-full">Eden will avoid shelters with sobriety requirements when possible.</div>
           </div>
         </div>
         <div id="step3" class="hide">
           <h2 id="s3title">Location and context</h2>
-          <label id="languagePrefLabel">Preferred spoken language</label>
-          <select id="preferredLanguage">
-            <option value="English">English</option>
-            <option value="Spanish">Spanish</option>
-            <option value="Mandarin">Mandarin</option>
-            <option value="Cantonese">Cantonese</option>
-            <option value="Vietnamese">Vietnamese</option>
-            <option value="Tagalog">Tagalog</option>
-            <option value="Hindi">Hindi</option>
-            <option value="Other">Other</option>
-          </select>
-          <label id="urgencyLabel">How urgently do you need shelter?</label>
-          <select id="urgency">
-            <option value="tonight">Tonight</option>
-            <option value="within_24h">Within 24 hours</option>
-            <option value="within_72h">Within 72 hours</option>
-          </select>
-          <label id="accessibilityLabel">Accessibility needs</label>
-          <select id="accessibilityNeeds">
-            <option value="none">None</option>
-            <option value="wheelchair">Wheelchair access</option>
-            <option value="mobility">General mobility support</option>
-          </select>
-          <label id="altContactLabel">Alternate contact (trusted person, optional)</label>
-          <input id="alternateContact" placeholder="Name + phone number" />
-          <label id="locLabel">What city or neighborhood are you in?</label>
-          <input id="location" placeholder="e.g. Mission District, SF" />
-          <label id="notesLabel">Anything urgent we should know? (optional)</label>
-          <textarea id="notes" maxlength="200" placeholder="e.g. I need wheelchair access"></textarea>
+          <div class="step-grid">
+            <div class="field-group">
+              <label id="languagePrefLabel">Preferred spoken language</label>
+              <select id="preferredLanguage">
+                <option value="English">English</option>
+                <option value="Spanish">Spanish</option>
+                <option value="Mandarin">Mandarin</option>
+                <option value="Cantonese">Cantonese</option>
+                <option value="Vietnamese">Vietnamese</option>
+                <option value="Tagalog">Tagalog</option>
+                <option value="Hindi">Hindi</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label id="urgencyLabel">How urgently do you need shelter?</label>
+              <select id="urgency">
+                <option value="tonight">Tonight</option>
+                <option value="within_24h">Within 24 hours</option>
+                <option value="within_72h">Within 72 hours</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label id="accessibilityLabel">Accessibility needs</label>
+              <select id="accessibilityNeeds">
+                <option value="none">None</option>
+                <option value="wheelchair">Wheelchair access</option>
+                <option value="mobility">General mobility support</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label id="altContactLabel">Alternate contact (trusted person, optional)</label>
+              <input id="alternateContact" placeholder="Name + phone number" />
+            </div>
+            <div class="field-group span-full">
+              <label id="locLabel">What city or neighborhood are you in?</label>
+              <input id="location" placeholder="e.g. Mission District, SF" />
+            </div>
+            <div class="field-group span-full">
+              <label id="notesLabel">Anything urgent we should know? (optional)</label>
+              <textarea id="notes" maxlength="200" placeholder="e.g. I need wheelchair access"></textarea>
+            </div>
+          </div>
         </div>
         <div id="step4" class="hide">
           <h2 id="s4title">Confirm and start search</h2>
@@ -605,8 +726,10 @@
         <div class="pulse"></div>
         <h2 id="statusTitle">Your agent is calling shelters now...</h2>
         <p id="statusSub">Please stay on this screen while we check availability.</p>
-        <div class="log" id="log"></div>
-        <div id="result" class="result-box hide"></div>
+        <div class="status-body">
+          <div class="log" id="log"></div>
+          <div id="result" class="result-box hide"></div>
+        </div>
       </div>
     </div>
 

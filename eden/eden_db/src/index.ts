@@ -78,7 +78,7 @@ interface IntakeTracker {
 const intakeTrackers = new Map<string, IntakeTracker>();
 const ttsAudioCache = new Map<string, { audio: Buffer; created_at_ms: number }>();
 
-const MAX_CONVERSATION_TURNS = 15;
+const MAX_CONVERSATION_TURNS = 8;
 interface ConversationState {
   job_id: string;
   attempt_id: string;
@@ -1073,8 +1073,16 @@ app.post("/webhooks/twilio/gather", async (req: Request, res: Response) => {
   });
 
   let shouldEndCall = result.shouldEndCall;
-  if (state.turns.filter((t) => t.role === "assistant").length >= MAX_CONVERSATION_TURNS) {
+  const assistantTurns = state.turns.filter((t) => t.role === "assistant");
+  if (assistantTurns.length >= MAX_CONVERSATION_TURNS) {
     shouldEndCall = true;
+  }
+  // Break repetition loop: if last 2 assistant replies both ask about availability, end instead
+  const lastTwo = assistantTurns.slice(-2).map((t) => (t as { content: string }).content.toLowerCase());
+  const bothAskAvailability = lastTwo.length >= 2 && lastTwo.every((c) => /availability|tell me|do you have|beds available/.test(c));
+  if (bothAskAvailability && !shouldEndCall) {
+    shouldEndCall = true;
+    result.reply = "Thanks for your time. We'll try other shelters. Goodbye.";
   }
 
   state.turns.push({ role: "assistant", content: result.reply });
