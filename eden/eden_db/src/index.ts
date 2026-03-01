@@ -874,6 +874,41 @@ app.post("/api/calls/script-preview", async (req: Request, res: Response) => {
   });
 });
 
+app.post("/api/test/call-me", async (req: Request, res: Response) => {
+  try {
+    const rawTo = String(req.body?.to || "14805483012").trim().replace(/\D/g, "");
+    const to = rawTo.startsWith("1") ? `+${rawTo}` : `+1${rawTo}`;
+
+    const twilioError = ensureTwilioConfigured("live");
+    if (twilioError) return res.status(400).json({ error: twilioError });
+
+    const testScript =
+      "Hello, this is a test call from Eden. Your ElevenLabs voice is working. Thanks for testing.";
+    const audioUrl = await createTtsAudioUrl(testScript);
+
+    const twiml = buildShelterIntakeTwiml({
+      shelterName: "Test",
+      survivorContext: "test",
+      scriptText: testScript,
+      audioUrl,
+    });
+
+    const { sid } = await createTwilioCall(twilioConfig, {
+      to,
+      twiml,
+      record: enableCallRecording,
+      recordingCallbackUrl,
+    });
+
+    return res.status(200).json({ success: true, sid, to });
+  } catch (error) {
+    return res.status(500).json({
+      error: "Test call failed",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
 app.get("/api/calls/jobs", (_req: Request, res: Response) => {
   return res.json({
     success: true,
