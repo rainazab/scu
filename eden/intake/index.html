@@ -75,7 +75,7 @@
         font-weight: 300;
       }
       .card {
-        background: rgba(255, 255, 255, 0.25);
+        background: rgba(255, 255, 255, 0.35);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.4);
@@ -83,17 +83,28 @@
         padding: 16px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
       }
-      .progress { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+      .progress { font-size: 14px; margin-bottom: 8px; }
       h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.2; }
       h2 { margin: 0 0 12px; font-size: 20px; }
-      p { margin: 0 0 12px; color: var(--muted); }
+      p { margin: 0 0 12px; }
+      h1, h2, p, label, .progress, .small, .hint, strong {
+        background:
+          linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.15)),
+          url('matisMissionPeak.jpg') center / cover fixed;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent !important;
+      }
+      .chip, .yn, .lang, .btn {
+        color: #4a5e3a !important;
+      }
       .chips {
         display: grid;
         gap: 10px;
       }
       .chip {
         border: 1px solid rgba(255, 255, 255, 0.5);
-        background: rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.3);
         min-height: 48px;
         border-radius: 12px;
         padding: 10px 12px;
@@ -122,7 +133,7 @@
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       .yn {
         border: 1px solid rgba(255, 255, 255, 0.5);
-        background: rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.3);
         min-height: 48px;
         border-radius: 12px;
         font-weight: 300;
@@ -148,7 +159,7 @@
         font-weight: 300;
       }
       .btn.secondary { background: #eef2f8; color: #334155; }
-      .btn.primary { background: var(--primary); color: #fff; flex: 1; }
+      .btn.primary { background: rgba(255, 255, 255, 0.3); border: 1px solid rgba(255, 255, 255, 0.5); flex: 1; }
       .status {
         text-align: center;
         padding-top: 20px;
@@ -361,7 +372,7 @@
 
       const state = {
         currently_safe: true,
-        needs: ["dv_specific", "shelter"],
+        needs: [],
         people_count: 1,
         gender_identity: "woman",
         age_range: "25_34",
@@ -751,10 +762,6 @@
       syncLabels();
       renderChips();
       document.getElementById("langBtn").textContent = labels[lang].nextLangShort;
-      document.getElementById("safeNowYes").classList.add("active");
-      document.getElementById("childrenNo").classList.add("active");
-      document.getElementById("petsNo").classList.add("active");
-      document.getElementById("pregnantNo").classList.add("active");
     </script>
   </body>
 </html>
