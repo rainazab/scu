@@ -69,7 +69,7 @@ interface IntakeTracker {
 }
 
 const intakeTrackers = new Map<string, IntakeTracker>();
-const ttsRequestCache = new Map<string, { text: string; created_at_ms: number }>();
+const ttsAudioCache = new Map<string, { audio: Buffer; created_at_ms: number }>();
 
 function getPublicBaseUrl(): string | null {
   if (process.env.NGROK_URL) return process.env.NGROK_URL.replace(/\/$/, "");
@@ -84,17 +84,23 @@ function getPublicBaseUrl(): string | null {
   return null;
 }
 
-function createTtsAudioUrl(text: string): string | null {
+async function createTtsAudioUrl(text: string): Promise<string | null> {
   if (!elevenLabsEnabled) return null;
   const base = getPublicBaseUrl();
   if (!base) return null;
   const cutoff = Date.now() - 10 * 60 * 1000;
-  ttsRequestCache.forEach((value, key) => {
-    if (value.created_at_ms < cutoff) ttsRequestCache.delete(key);
+  ttsAudioCache.forEach((value, key) => {
+    if (value.created_at_ms < cutoff) ttsAudioCache.delete(key);
   });
-  const token = randomUUID();
-  ttsRequestCache.set(token, { text, created_at_ms: Date.now() });
-  return `${base}/api/voice/tts/${token}.mp3`;
+  try {
+    const audio = await synthesizeElevenLabsSpeech(elevenLabsConfig, text);
+    const token = randomUUID();
+    ttsAudioCache.set(token, { audio, created_at_ms: Date.now() });
+    return `${base}/api/voice/tts/${token}.mp3`;
+  } catch (error) {
+    console.error("ElevenLabs synthesis failed; falling back to Twilio Polly voice", error);
+    return null;
+  }
 }
 
 const pool = new Pool({
@@ -124,25 +130,13 @@ app.get("/api/voice/tts/:token.mp3", async (req: Request, res: Response) => {
     return res.status(404).json({ error: "ElevenLabs TTS is not enabled." });
   }
   const token = String(req.params.token || "");
-  const cached = ttsRequestCache.get(token);
+  const cached = ttsAudioCache.get(token);
   if (!cached) {
     return res.status(404).json({ error: "TTS token not found or expired." });
   }
-
-  // One-time use token for safer public access.
-  ttsRequestCache.delete(token);
-
-  try {
-    const audio = await synthesizeElevenLabsSpeech(elevenLabsConfig, cached.text);
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Cache-Control", "no-store");
-    return res.status(200).send(audio);
-  } catch (error) {
-    return res.status(502).json({
-      error: "Failed to synthesize speech",
-      message: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
+  res.setHeader("Content-Type", "audio/mpeg");
+  res.setHeader("Cache-Control", "public, max-age=600");
+  return res.status(200).send(cached.audio);
 });
 
 app.get("/api/safety/config", (_req: Request, res: Response) => {
@@ -281,6 +275,7 @@ async function queryNearestShelters(params: {
     state: string | null;
     accepts_children: boolean;
     accepts_pets: boolean;
+    languages_spoken: string[];
     distance_meters: number;
   }>
 > {
@@ -298,7 +293,7 @@ async function queryNearestShelters(params: {
     `
     SELECT
       id, shelter_name, intake_phone, address, city, state,
-      accepts_children, accepts_pets,
+      accepts_children, accepts_pets, languages_spoken,
       ST_Distance(coordinates, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography) AS distance_meters
     FROM shelters
     ${where}
@@ -317,8 +312,74 @@ async function queryNearestShelters(params: {
     state: row.state ? String(row.state) : null,
     accepts_children: Boolean(row.accepts_children),
     accepts_pets: Boolean(row.accepts_pets),
+    languages_spoken: Array.isArray(row.languages_spoken)
+      ? row.languages_spoken.map((item: unknown) => String(item))
+      : [],
     distance_meters: Number(row.distance_meters || 0),
   }));
+}
+
+function applyEligibilityFilters(
+  targets: Array<{
+    id: number;
+    shelter_name: string;
+    intake_phone: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    accepts_children: boolean;
+    accepts_pets: boolean;
+    languages_spoken: string[];
+    distance_meters: number;
+  }>,
+  triage: {
+    gender_identity: string;
+    age_range: string;
+    pregnant: boolean;
+    sobriety: string;
+    preferred_language: string;
+  }
+) {
+  const womenFocusedPatterns = [
+    "women",
+    "ywca",
+    "maitri",
+    "la casa de las madres",
+    "cora",
+    "save silicon valley",
+    "next door solutions",
+    "riley center",
+  ];
+  const youthOnlyPatterns = ["covenant house", "youth collective"];
+  const sobrietyRequiredPatterns = ["salvation army", "clean and sober"];
+  const pregnancyFriendlyPatterns = ["heritage", "pregnan", "maternity"];
+
+  const shouldExcludeWomenFocused = ["man", "male", "trans_man"].includes(triage.gender_identity);
+  let filtered = targets.filter((target) => {
+    const name = target.shelter_name.toLowerCase();
+    if (shouldExcludeWomenFocused && womenFocusedPatterns.some((p) => name.includes(p))) return false;
+    if (triage.age_range !== "18_24" && youthOnlyPatterns.some((p) => name.includes(p))) return false;
+    if (triage.sobriety === "not_currently_sober" && sobrietyRequiredPatterns.some((p) => name.includes(p))) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) filtered = targets;
+
+  const preferred = triage.preferred_language.trim().toLowerCase();
+  filtered.sort((a, b) => {
+    const aLang = a.languages_spoken.some((lang) => lang.toLowerCase() === preferred) ? 1 : 0;
+    const bLang = b.languages_spoken.some((lang) => lang.toLowerCase() === preferred) ? 1 : 0;
+    if (aLang !== bLang) return bLang - aLang;
+
+    if (triage.pregnant) {
+      const aPreg = pregnancyFriendlyPatterns.some((p) => a.shelter_name.toLowerCase().includes(p)) ? 1 : 0;
+      const bPreg = pregnancyFriendlyPatterns.some((p) => b.shelter_name.toLowerCase().includes(p)) ? 1 : 0;
+      if (aPreg !== bPreg) return bPreg - aPreg;
+    }
+    return a.distance_meters - b.distance_meters;
+  });
+
+  return filtered;
 }
 
 function buildSurvivorContextFromIntake(input: {
@@ -739,12 +800,14 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
       }
 
       try {
-        const twiml = buildShelterIntakeTwiml({
+          const audioUrl =
+            mode === "live" ? (await createTtsAudioUrl(scriptResult.script)) || undefined : undefined;
+          const twiml = buildShelterIntakeTwiml({
           shelterName: attempt.shelter_name,
           survivorContext,
           callbackNumber: anonymousMode ? undefined : callbackNumber,
           scriptText: scriptResult.script,
-          audioUrl: mode === "live" ? createTtsAudioUrl(scriptResult.script) || undefined : undefined,
+            audioUrl,
         });
         const { sid } = await createTwilioCall(twilioConfig, {
           to: attempt.to_phone,
@@ -915,6 +978,16 @@ app.post("/api/intake", async (req: Request, res: Response) => {
     const peopleCount = Number(req.body.people_count || 1);
     const hasChildren = Boolean(req.body.has_children);
     const hasPets = Boolean(req.body.has_pets);
+    const currentlySafe = req.body.currently_safe !== false;
+    const genderIdentity = String(req.body.gender_identity || "prefer_not").toLowerCase();
+    const ageRange = String(req.body.age_range || "25_34");
+    const childAges = String(req.body.child_ages || "").trim();
+    const pregnant =
+      req.body.pregnant === true || String(req.body.pregnant || "").toLowerCase() === "yes";
+    const sobriety = String(req.body.sobriety || "unknown");
+    const preferredLanguage = String(req.body.preferred_language || "English");
+    const accessibilityNeeds = String(req.body.accessibility_needs || "none");
+    const alternateContact = String(req.body.alternate_contact || "").trim();
     const location = String(req.body.location || "").trim();
     const notes = req.body.notes ? String(req.body.notes) : "";
     const callbackNumber = req.body.callback_number ? String(req.body.callback_number).trim() : "";
@@ -968,7 +1041,20 @@ app.post("/api/intake", async (req: Request, res: Response) => {
       has_children: hasChildren,
       has_pets: hasPets,
       location,
-      notes,
+      notes: [
+        notes,
+        `currently_safe=${currentlySafe ? "yes" : "no"}`,
+        `gender_identity=${genderIdentity}`,
+        `age_range=${ageRange}`,
+        `child_ages=${childAges || "none"}`,
+        `pregnant=${pregnant ? "yes" : "no"}`,
+        `sobriety=${sobriety}`,
+        `preferred_language=${preferredLanguage}`,
+        `accessibility_needs=${accessibilityNeeds}`,
+        `alternate_contact=${alternateContact || "none"}`,
+      ]
+        .filter(Boolean)
+        .join(" | "),
     });
     const risk = safetyControls.assessRisk(survivorContextRaw);
     if (defaultCallMode === "live" && safetyControls.shouldBlockLiveAction(risk, false)) {
@@ -992,7 +1078,15 @@ app.post("/api/intake", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "No nearby resources found for intake." });
     }
 
-    const callTargets: ShelterCallTarget[] = targets.map((t) => ({
+    const matchedTargets = applyEligibilityFilters(targets, {
+      gender_identity: genderIdentity,
+      age_range: ageRange,
+      pregnant,
+      sobriety,
+      preferred_language: preferredLanguage,
+    });
+
+    const callTargets: ShelterCallTarget[] = matchedTargets.map((t) => ({
       id: t.id,
       shelter_name: t.shelter_name,
       intake_phone: t.intake_phone,
@@ -1045,12 +1139,16 @@ app.post("/api/intake", async (req: Request, res: Response) => {
             continue;
           }
 
+          const audioUrl =
+            defaultCallMode === "live"
+              ? (await createTtsAudioUrl(scriptResult.script)) || undefined
+              : undefined;
           const twiml = buildShelterIntakeTwiml({
             shelterName: attempt.shelter_name,
             survivorContext: survivorContextRaw,
             callbackNumber: undefined,
             scriptText: scriptResult.script,
-            audioUrl: defaultCallMode === "live" ? createTtsAudioUrl(scriptResult.script) || undefined : undefined,
+            audioUrl,
           });
           const { sid } = await createTwilioCall(twilioConfig, {
             to: attempt.to_phone,
