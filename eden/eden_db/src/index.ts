@@ -1077,12 +1077,12 @@ app.post("/webhooks/twilio/gather", async (req: Request, res: Response) => {
   if (assistantTurns.length >= MAX_CONVERSATION_TURNS) {
     shouldEndCall = true;
   }
-  // Break repetition loop: if last 2 assistant replies both ask about availability, end instead
-  const lastTwo = assistantTurns.slice(-2).map((t) => (t as { content: string }).content.toLowerCase());
-  const bothAskAvailability = lastTwo.length >= 2 && lastTwo.every((c) => /availability|tell me|do you have|beds available/.test(c));
-  if (bothAskAvailability && !shouldEndCall) {
+  // Repetition guard: if we've asked about availability 3+ times with no clear answer, gently move on
+  const lastThree = assistantTurns.slice(-3).map((t) => (t as { content: string }).content.toLowerCase());
+  const allThreeAskAvailability = lastThree.length >= 3 && lastThree.every((c) => /do you have|beds available|any beds|availability/.test(c));
+  if (allThreeAskAvailability && !shouldEndCall) {
     shouldEndCall = true;
-    result.reply = "Thanks for your time. We'll try other shelters. Goodbye.";
+    result.reply = "Thanks for your time. We'll follow up another way. Goodbye.";
   }
 
   state.turns.push({ role: "assistant", content: result.reply });
@@ -1101,7 +1101,7 @@ app.post("/webhooks/twilio/gather", async (req: Request, res: Response) => {
     const fallbackGatherUrl = nextGatherUrl?.replace(/[<>&'"]/g, "");
     if (fallbackGatherUrl) {
       return res.send(
-        `<Response><Gather input="speech" action="${fallbackGatherUrl}" method="POST" timeout="15" speechTimeout="auto"><Say>${safeFallbackReply}</Say></Gather><Say>We didn't catch that. Goodbye.</Say></Response>`
+        `<Response><Gather input="speech" action="${fallbackGatherUrl}" method="POST" timeout="15" speechTimeout="auto" speechModel="phone_call" enhanced="true"><Say>${safeFallbackReply}</Say></Gather><Say>Still here. Could you say that again?</Say></Response>`
       );
     }
     return res.send(`<Response><Say>${safeFallbackReply}</Say><Hangup/></Response>`);

@@ -258,21 +258,28 @@ export async function generateConversationalReply(
   const lastUser = input.conversationHistory.filter((t) => t.role === "user").pop()?.content || "";
   const hasClearUserSpeech = lastUser && lastUser !== "(no speech detected)" && lastUser.length > 3;
 
-  // Prefer fast regex-based fallback for clear availability signals—avoids lag and repetition
-  if (hasClearUserSpeech) {
-    const contextual = buildContextualFallback(lastUser);
-    const isAvailabilityRelated =
-      NO_BEDS_PATTERNS.test(lastUser) ||
-      HAS_BEDS_PATTERNS.test(lastUser) ||
-      /(waitlist|wait list|hold|hold on|wait|one moment|one sec|let me check|who is this|who are you)/i.test(lastUser);
-    if (isAvailabilityRelated) {
-      return { result: contextual, source: "fallback" };
-    }
+  // No speech at all — stay on line and re-prompt
+  if (!hasClearUserSpeech) {
+    return { result: { reply: "I didn't catch that. Do you have any beds available tonight?", shouldEndCall: false }, source: "fallback" };
   }
 
+  // Short speech (≤25 chars) — likely interrupt, greeting, or acknowledgment. Use fast fallback to avoid OpenAI timeout.
+  if (lastUser.length <= 25) {
+    return { result: buildContextualFallback(lastUser), source: "fallback" };
+  }
+
+  // Clear availability signals — fast regex, no OpenAI needed
+  const isAvailabilitySignal =
+    NO_BEDS_PATTERNS.test(lastUser) ||
+    HAS_BEDS_PATTERNS.test(lastUser) ||
+    /(waitlist|wait list|hold|hold on|wait|one moment|one sec|let me check|who is this|who are you)/i.test(lastUser);
+  if (isAvailabilitySignal) {
+    return { result: buildContextualFallback(lastUser), source: "fallback" };
+  }
+
+  // AI disabled — use contextual fallback, never hang up because AI is off
   if (!aiEnabled()) {
-    const contextual = hasClearUserSpeech ? buildContextualFallback(lastUser) : { reply: "Thanks. We'll follow up. Goodbye.", shouldEndCall: true };
-    return { result: contextual, source: "fallback" };
+    return { result: buildContextualFallback(lastUser), source: "fallback" };
   }
 
   const messages: OpenAIMessage[] = [
@@ -282,7 +289,8 @@ export async function generateConversationalReply(
         "You are Eden, a placement coordinator. You called a shelter to ask about bed availability on behalf of someone seeking housing.",
         `Shelter: ${input.shelterName}. Survivor context: ${input.survivorContext}.`,
         "Rules: Keep replies to 1-2 SHORT sentences. Get to the point.",
-        "If they said NO beds / full capacity / waitlist only: thank them briefly and set shouldEndCall true. Do NOT ask about availability again.",
+        "IMPORTANT: Only set shouldEndCall true if they EXPLICITLY said no beds, full capacity, or waitlist only.",
+        "If unclear, confused, or off-topic: keep the call alive with shouldEndCall false and gently re-ask.",
         "If they said they HAVE beds: ask about intake requirements, shouldEndCall false.",
         "If they asked to hold/transfer: say you'll hold, shouldEndCall false.",
         "Output JSON only: { reply: string, shouldEndCall: boolean }.",
@@ -295,22 +303,23 @@ export async function generateConversationalReply(
   ];
 
   try {
-    const text = await runOpenAI(messages);
-    const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    const openAiPromise = runOpenAI(messages);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("OpenAI timeout")), 7000)
+    );
+    const text = await Promise.race([openAiPromise, timeoutPromise]);
+    const cleaned = (text as string).replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
     const parsed = JSON.parse(cleaned) as { reply?: string; shouldEndCall?: boolean };
-    const reply = typeof parsed.reply === "string" ? parsed.reply.trim().slice(0, 500) : "";
+    const reply = typeof parsed.reply === "string" ? parsed.reply.trim().slice(0, 400) : "";
     const shouldEndCall = Boolean(parsed.shouldEndCall);
-    const lastUser = input.conversationHistory.filter((t) => t.role === "user").pop()?.content || "";
-    const contextual = lastUser && lastUser !== "(no speech detected)" ? buildContextualFallback(lastUser) : { reply: "Thanks. We'll follow up. Goodbye.", shouldEndCall: true };
-    if (!reply) return { result: contextual, source: "fallback" };
+    if (!reply) return { result: buildContextualFallback(lastUser), source: "fallback" };
     return { result: { reply, shouldEndCall }, source: "openai" };
   } catch (error) {
-    console.warn("OpenAI conversational reply failed", {
+    const isTimeout = error instanceof Error && error.message === "OpenAI timeout";
+    console.warn(isTimeout ? "OpenAI timed out — using fast fallback" : "OpenAI conversational reply failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
-    const lastUser = input.conversationHistory.filter((t) => t.role === "user").pop()?.content || "";
-    const contextual = lastUser && lastUser !== "(no speech detected)" ? buildContextualFallback(lastUser) : { reply: "Thanks. We'll follow up. Goodbye.", shouldEndCall: true };
-    return { result: contextual, source: "fallback" };
+    return { result: buildContextualFallback(lastUser), source: "fallback" };
   }
 }
 

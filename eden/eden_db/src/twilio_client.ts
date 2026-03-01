@@ -120,10 +120,10 @@ export function buildShelterIntakeTwiml(context: {
     if (safeGatherAction) {
       return [
         "<Response>",
-        `<Gather input="speech" action="${safeGatherAction}" method="POST" timeout="15" speechTimeout="auto" hints="bed,beds,available,waitlist,intake,requirements,callback,full,capacity">`,
+        `<Gather input="speech" action="${safeGatherAction}" method="POST" timeout="15" speechTimeout="auto" speechModel="phone_call" enhanced="true" hints="bed,beds,available,waitlist,intake,requirements,callback,full,capacity">`,
         `<Play>${safeAudioUrl}</Play>`,
         "</Gather>",
-        "<Say>We didn't receive a response. We'll follow up through our usual channels. Goodbye.</Say>",
+        "<Say>We didn't catch your response. Trying to connect again shortly.</Say>",
         "</Response>",
       ].join("");
     }
@@ -159,10 +159,10 @@ export function buildConversationFollowUpTwiml(options: {
     parts.push(`<Play>${safeUrl}</Play>`, "<Hangup/>");
   } else {
     parts.push(
-      `<Gather input="speech" action="${safeAction}" method="POST" timeout="15" speechTimeout="auto" hints="bed,beds,available,waitlist,full,capacity,intake">`,
+      `<Gather input="speech" action="${safeAction}" method="POST" timeout="15" speechTimeout="auto" speechModel="phone_call" enhanced="true" hints="bed,beds,available,waitlist,full,capacity,intake">`,
       `<Play>${safeUrl}</Play>`,
       "</Gather>",
-      "<Say>We didn't catch that. Goodbye.</Say>"
+      "<Say>Still here. Could you say that again?</Say>"
     );
   }
   parts.push("</Response>");
