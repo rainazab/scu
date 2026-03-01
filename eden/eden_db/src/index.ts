@@ -55,12 +55,9 @@ type IntakeNeed =
 interface IntakeTracker {
   job_id: string;
   created_at_ms: number;
-  callback_number?: string;
   location: string;
   has_children: boolean;
   has_pets: boolean;
-  sms_sent?: boolean;
-  no_result_sms_sent?: boolean;
 }
 
 const intakeTrackers = new Map<string, IntakeTracker>();
@@ -858,12 +855,12 @@ app.post("/api/intake", async (req: Request, res: Response) => {
     const hasPets = Boolean(req.body.has_pets);
     const location = String(req.body.location || "").trim();
     const notes = req.body.notes ? String(req.body.notes) : "";
-    const callbackNumber = String(req.body.callback_number || "").trim();
+    const callbackNumber = req.body.callback_number ? String(req.body.callback_number).trim() : "";
 
-    if (!location || !callbackNumber) {
-      return res.status(400).json({ error: "location and callback_number are required." });
+    if (!location) {
+      return res.status(400).json({ error: "location is required." });
     }
-    if (safetyControls.isBlockedNumber(callbackNumber)) {
+    if (callbackNumber && safetyControls.isBlockedNumber(callbackNumber)) {
       return res.status(403).json({ error: "callback_number is blocked by no-call-back safety policy." });
     }
 
@@ -944,7 +941,7 @@ app.post("/api/intake", async (req: Request, res: Response) => {
     const job = callJobs.createJob({
       mode: defaultCallMode,
       survivor_context: survivorContextRaw,
-      callback_number: callbackNumber,
+      callback_number: undefined,
       anonymous_mode: false,
       escalation_approved: false,
       targets: callTargets,
@@ -954,7 +951,6 @@ app.post("/api/intake", async (req: Request, res: Response) => {
     intakeTrackers.set(job.job_id, {
       job_id: job.job_id,
       created_at_ms: Date.now(),
-      callback_number: callbackNumber,
       location,
       has_children: hasChildren,
       has_pets: hasPets,
@@ -973,7 +969,7 @@ app.post("/api/intake", async (req: Request, res: Response) => {
         const scriptResult = await generateCallScript({
           shelterName: attempt.shelter_name,
           survivorContext: survivorContextRaw,
-          callbackNumber,
+          callbackNumber: undefined,
         });
         callJobs.markAttempt(job.job_id, attempt.attempt_id, {
           generated_script: scriptResult.script,
@@ -988,7 +984,7 @@ app.post("/api/intake", async (req: Request, res: Response) => {
         const twiml = buildShelterIntakeTwiml({
           shelterName: attempt.shelter_name,
           survivorContext: survivorContextRaw,
-          callbackNumber,
+          callbackNumber: undefined,
           scriptText: scriptResult.script,
         });
         const { sid } = await createTwilioCall(twilioConfig, {
@@ -1028,7 +1024,6 @@ app.get("/api/intake/status/:job_id", async (req: Request, res: Response) => {
 
   applyDemoProgress(job.job_id);
   const refreshed = callJobs.getJob(job.job_id) || job;
-  const tracker = intakeTrackers.get(job.job_id);
 
   let result: null | {
     shelter_name: string;
@@ -1066,36 +1061,6 @@ app.get("/api/intake/status/:job_id", async (req: Request, res: Response) => {
       };
     }
 
-    if (tracker?.callback_number && !tracker.sms_sent) {
-      try {
-        await sendFoundSms({
-          callback_number: tracker.callback_number,
-          shelter_name: result?.shelter_name || availableAttempt.shelter_name,
-          address: result?.address,
-          city: result?.city,
-          phone: result?.intake_phone,
-          accepts_children: result?.accepts_children,
-          accepts_pets: result?.accepts_pets,
-        });
-        tracker.sms_sent = true;
-      } catch (error) {
-        console.error("Failed to send found SMS", error);
-      }
-    }
-  } else {
-    const allDone = refreshed.attempts.length > 0 && refreshed.attempts.every((a) => a.status !== "queued");
-    if (allDone && tracker?.callback_number && !tracker.no_result_sms_sent) {
-      try {
-        await sendNoResultSms({
-          callback_number: tracker.callback_number,
-          count: refreshed.attempts.length,
-          location: tracker.location,
-        });
-        tracker.no_result_sms_sent = true;
-      } catch (error) {
-        console.error("Failed to send no-result SMS", error);
-      }
-    }
   }
 
   const attempts = refreshed.attempts.map((attempt) => ({
