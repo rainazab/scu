@@ -1,73 +1,74 @@
-# EDEN Rebuild Plan
+# Eden
 
-This repo is being rebuilt from the original CalHacks code in short phases so each phase can be committed independently.
+Eden is an intake + shelter-calling system focused on urgent DV and immigrant-support shelter matching.
 
-## Phase 1A
-- Create `eden/eden_db` from `pizza_db`
-- Rebrand core database + API terms (`pizza_*` -> `shelter_*`)
-- Ship nearest-shelter geospatial endpoints:
-  - `GET /api/shelters/nearest`
-  - `POST /api/shelters/nearest`
-  - `GET /api/shelters`
-  - `GET /api/shelters/:id`
-- Add shelter-focused schema fields (`available_beds`, `accepts_children`, etc.)
+It combines:
+- geospatial shelter search (`Postgres` + `PostGIS`)
+- API-driven intake triage and call orchestration (`Node` + `Express` + `TypeScript`)
+- outbound call execution (`Twilio`)
+- optional higher-quality voice playback (`ElevenLabs` TTS via Twilio `<Play>`)
 
-## Phase 1B
-- Removed pizza/deals and Google Sheets docs from `eden_db`
-- Added DV shelter seed data at `eden_db/data/shelters_seed.csv`
-- Updated importer to load shelter records from DV seed format
-- Updated setup/dev docs and scripts to shelter endpoints
+## Current Product Behavior
 
-## Phase 2A
-- Added in-memory outbound call job queue and job status endpoints
-- Added Twilio call-initiation skeleton with `dry_run` default
-- Added webhook endpoints for call status and transcript snippets
+- Intake runs from `intake/index.html` as a **4-step** flow:
+  - Situation now (includes immediate safety gate)
+  - Group triage (gender/age/children/pregnancy/sobriety)
+  - Location + context (language, accessibility, alternate contact)
+  - Confirm + start search
+- Intake does **not require SMS/texting** to function.
+- `POST /api/intake` returns quickly with `job_id`; call setup continues asynchronously.
+- `GET /api/intake/status/:job_id` powers the live progress feed.
+- Matching is triage-aware with simple eligibility filtering/prioritization (language, sobriety constraints, demographic fit).
+- Supports both:
+  - `dry_run` demo progression
+  - `live` Twilio calling mode
 
-## Phase 2B
-- Added AI/fallback call script generation for shelter outreach
-- Added transcript parsing into structured availability/intake fields
-- Added script preview and transcript parsing endpoints for fast iteration
+## Key Endpoints
 
-## Phase 3A
-- Added warm transfer orchestration endpoints with dry-run/live support
-- Added Twilio conference-bridge skeleton for survivor+shelter connection
-- Added dashboard endpoints for shelter/call/transfer operations metrics
+- `GET /health`
+- `GET /api/shelters/nearest`
+- `GET /api/shelters`
+- `GET /api/shelters/:id`
+- `POST /api/intake`
+- `GET /api/intake/status/:job_id`
+- `POST /api/calls/jobs`
+- `GET /api/calls/jobs`
+- `GET /api/calls/jobs/:job_id`
+- `POST /webhooks/twilio/status`
+- `POST /webhooks/twilio/recording`
+- `POST /api/demo/reset`
 
-## Phase 4A
-- Added no-call-back deny list API and enforcement on call/warm-transfer actions
-- Added anonymous mode redaction + callback suppression options
-- Added escalation policy enforcement for high-risk live operations
-- Added safety dashboard signals and escalation event logging
+## Data
 
-## Phase 5A
-- Added Postgres persistence for call jobs and warm transfer sessions
-- Added persisted escalation events and blocked numbers
-- Added startup bootstrap to load persisted safety state into runtime
-- Added persistence schema for operational state tables
+- Shelter seed source: `eden_db/data/shelters_seed.csv`
+- Primary table: `shelters` (schema in `eden_db/init_db.sql`)
 
-## Phase 6A (current)
-- Added intake experience end-to-end:
-  - `POST /api/intake`
-  - `GET /api/intake/status/:job_id`
-  - static mobile UI at `intake/index.html`
-- Added demo hardening:
-  - dry-run staged progression (fail/fail/found)
-  - `POST /api/demo/reset`
-- Added Twilio recording webhook path and call recording flag gating
-- Added SMS delivery helper for found/no-result outcomes
-- Added static ops dashboard at `dashboard/index.html`
-- Added local container setup:
-  - `docker-compose.yml`
-  - `eden_db/Dockerfile`
-  - `START.md`
+To reload shelter data:
 
-## Suggested Commit Sequence
-- `phase-6a-recording-and-sms`: `src/twilio_client.ts`, recording webhook in `src/index.ts`, `env.template`
-- `phase-6a-intake-api`: intake endpoints and demo reset in `src/index.ts`, updates to `src/call_jobs.ts` and `src/warm_transfer.ts`
-- `phase-6a-seed-data`: `data/shelters_seed.csv` replacement
-- `phase-6a-intake-ui`: `intake/index.html`
-- `phase-6a-dashboard-ui`: `dashboard/index.html`
-- `phase-6a-devops`: `docker-compose.yml`, `eden_db/Dockerfile`, `START.md`, docs updates
+```bash
+cd eden/eden_db
+npm run init-db
+npm run import-data
+```
 
-## Next Short Phases
-- **Phase 6B:** auth/role controls for admin/safety endpoints + API key middleware
+## Voice Configuration
+
+Twilio is the call transport.
+
+For more natural speech in live mode, set:
+- `ELEVENLABS_API_KEY`
+- `ELEVENLABS_VOICE_ID`
+- `ELEVENLABS_MODEL_ID`
+- `NGROK_URL` (public URL Twilio can reach for generated audio)
+
+If ElevenLabs is unavailable, Eden falls back to Twilio Polly `<Say>`.
+
+## Run Notes
+
+- Main backend lives in `eden/eden_db`
+- Quick local run instructions: `eden/START.md`
+- Keep `ngrok` running in live mode so Twilio can hit webhook/audio endpoints
+
+## Next Phase
+
+- Admin/auth hardening for safety and operations endpoints (role/API key controls)
