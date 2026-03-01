@@ -17,6 +17,7 @@ import { WarmTransferMode, WarmTransferStore } from "./warm_transfer";
 import { SafetyControls } from "./safety_controls";
 import { PersistenceService } from "./persistence";
 import { synthesizeElevenLabsSpeech } from "./elevenlabs_client";
+import { registerTwilioCall } from "./elevenlabs_agent";
 
 dotenv.config();
 
@@ -56,6 +57,8 @@ const elevenLabsConfig = {
   modelId: process.env.ELEVENLABS_MODEL_ID || "eleven_turbo_v2_5",
 };
 const elevenLabsEnabled = Boolean(elevenLabsConfig.apiKey);
+const elevenLabsAgentId = process.env.ELEVENLABS_AGENT_ID?.trim() || "";
+const elevenLabsAgentEnabled = Boolean(elevenLabsConfig.apiKey && elevenLabsAgentId);
 
 type IntakeNeed =
   | "shelter"
@@ -841,23 +844,40 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
 
       try {
         const baseUrl = getPublicBaseUrl();
-        const gatherActionUrl = baseUrl
-          ? `${baseUrl}/webhooks/twilio/gather?job_id=${encodeURIComponent(job.job_id)}&attempt_id=${encodeURIComponent(attempt.attempt_id)}`
-          : undefined;
-        const twiml = buildShelterIntakeTwiml({
-          shelterName: attempt.shelter_name,
-          survivorContext,
-          callbackNumber: anonymousMode ? undefined : callbackNumber,
-          scriptText: scriptResult.script,
-          audioUrl,
-          gatherActionUrl,
-        });
-        const { sid } = await createTwilioCall(twilioConfig, {
-          to: callDest,
-          twiml,
-          record: enableCallRecording,
-          recordingCallbackUrl,
-        });
+        let callResult: { sid: string };
+        if (elevenLabsAgentEnabled && baseUrl) {
+          const connectUrl = `${baseUrl}/webhooks/twilio/connect-agent?job_id=${encodeURIComponent(job.job_id)}&attempt_id=${encodeURIComponent(attempt.attempt_id)}`;
+          callResult = await createTwilioCall(twilioConfig, {
+            to: callDest,
+            url: connectUrl,
+            record: enableCallRecording,
+            recordingCallbackUrl,
+          });
+          callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+            generated_script: "(ElevenLabs agent handles conversation)",
+            generated_script_source: "elevenlabs_agent",
+            voice_path: "elevenlabs_agent",
+          });
+        } else {
+          const gatherActionUrl = baseUrl
+            ? `${baseUrl}/webhooks/twilio/gather?job_id=${encodeURIComponent(job.job_id)}&attempt_id=${encodeURIComponent(attempt.attempt_id)}`
+            : undefined;
+          const twiml = buildShelterIntakeTwiml({
+            shelterName: attempt.shelter_name,
+            survivorContext,
+            callbackNumber: anonymousMode ? undefined : callbackNumber,
+            scriptText: scriptResult.script,
+            audioUrl,
+            gatherActionUrl,
+          });
+          callResult = await createTwilioCall(twilioConfig, {
+            to: callDest,
+            twiml,
+            record: enableCallRecording,
+            recordingCallbackUrl,
+          });
+        }
+        const { sid } = callResult;
         callJobs.bindProviderSid(job.job_id, attempt.attempt_id, sid);
         callJobs.markAttempt(job.job_id, attempt.attempt_id, { status: "initiated" });
         persistCallJobState(job.job_id);
@@ -920,27 +940,38 @@ app.post("/api/test/call-me", async (req: Request, res: Response) => {
     const twilioError = ensureTwilioConfigured("live");
     if (twilioError) return res.status(400).json({ error: twilioError });
 
-    const testScript =
-      "Hello, this is a test call from Eden. Say something and I'll respond. You can also press 1 for yes, 2 for no, or 9 for hold on.";
-    const audioUrl = await createTtsAudioUrl(testScript);
-
     const baseUrl = getPublicBaseUrl();
-    const gatherActionUrl = baseUrl ? `${baseUrl}/webhooks/twilio/gather` : undefined;
-    const twiml = buildShelterIntakeTwiml({
-      shelterName: "Test",
-      survivorContext: "test",
-      scriptText: testScript,
-      audioUrl,
-      gatherActionUrl,
-    });
-
-    const { sid } = await createTwilioCall(twilioConfig, {
-      to,
-      twiml,
-      record: enableCallRecording,
-      recordingCallbackUrl,
-    });
-    testCallContexts.set(sid, { initial_script: testScript });
+    let sid: string;
+    if (elevenLabsAgentEnabled && baseUrl) {
+      const connectUrl = `${baseUrl}/webhooks/twilio/connect-agent?job_id=test&attempt_id=test`;
+      const callResult = await createTwilioCall(twilioConfig, {
+        to,
+        url: connectUrl,
+        record: enableCallRecording,
+        recordingCallbackUrl,
+      });
+      sid = callResult.sid;
+    } else {
+      const testScript =
+        "Hello, this is a test call from Eden. Say something and I'll respond. You can also press 1 for yes, 2 for no, or 9 for hold on.";
+      const audioUrl = await createTtsAudioUrl(testScript);
+      const gatherActionUrl = baseUrl ? `${baseUrl}/webhooks/twilio/gather` : undefined;
+      const twiml = buildShelterIntakeTwiml({
+        shelterName: "Test",
+        survivorContext: "test",
+        scriptText: testScript,
+        audioUrl,
+        gatherActionUrl,
+      });
+      const callResult = await createTwilioCall(twilioConfig, {
+        to,
+        twiml,
+        record: enableCallRecording,
+        recordingCallbackUrl,
+      });
+      sid = callResult.sid;
+      testCallContexts.set(sid, { initial_script: testScript });
+    }
 
     return res.status(200).json({ success: true, sid, to });
   } catch (error) {
@@ -1000,6 +1031,88 @@ app.post("/webhooks/twilio/recording", (req: Request, res: Response) => {
   });
   persistCallJobState(linked.job.job_id);
   return res.status(200).json({ success: true });
+});
+
+const CONNECT_AGENT_FALLBACK = "<Response><Say>We're having trouble connecting. Please try again later. Goodbye.</Say><Hangup/></Response>";
+
+/**
+ * When using ElevenLabs Agent: Twilio fetches this URL when the shelter answers.
+ * We call ElevenLabs register-call to get TwiML that connects the call to the agent.
+ */
+app.all("/webhooks/twilio/connect-agent", async (req: Request, res: Response) => {
+  const sendFallback = () => {
+    res.type("text/xml").set("Cache-Control", "no-store");
+    return res.status(200).send(CONNECT_AGENT_FALLBACK);
+  };
+  try {
+    const jobId = String(req.query.job_id || "").trim();
+    const attemptId = String(req.query.attempt_id || "").trim();
+    const fromNumber = String(req.body?.From || req.body?.from || req.query?.From || twilioConfig.fromNumber || "");
+    const toNumber = String(req.body?.To || req.body?.to || req.query?.To || "");
+
+    console.log("[connect-agent] request", { jobId, attemptId, fromNumber: fromNumber?.slice(-4), toNumber: toNumber?.slice(-4) });
+
+    if (!elevenLabsAgentEnabled) {
+      res.type("text/xml");
+      return res.send("<Response><Say>Eden agent is not configured. Goodbye.</Say><Hangup/></Response>");
+    }
+    if (!jobId || !attemptId) {
+      res.type("text/xml");
+      return res.send("<Response><Say>Call could not be connected. Goodbye.</Say><Hangup/></Response>");
+    }
+
+    let shelterName = "";
+    let survivorContext = "";
+    let callbackNumber = "none";
+    if (jobId === "test" && attemptId === "test") {
+      shelterName = "Test";
+      survivorContext = "test call from Eden";
+    } else {
+      const linked = callJobs.findByProviderSid(String(req.body?.CallSid || req.body?.call_sid || ""));
+      if (linked) {
+        shelterName = linked.attempt.shelter_name || "";
+        survivorContext = String(linked.job.request.survivor_context || "");
+        callbackNumber = linked.job.request.callback_number || "none";
+      } else {
+        const jobFromDb = await persistence.getCallJob(jobId);
+        if (jobFromDb) {
+          const attempt = jobFromDb.attempts.find((a) => a.attempt_id === attemptId);
+          if (attempt) {
+            shelterName = attempt.shelter_name || "";
+            survivorContext = String(jobFromDb.request.survivor_context || "");
+            callbackNumber = jobFromDb.request.callback_number || "none";
+          }
+        }
+      }
+    }
+
+    const survivorContextSafe = (survivorContext || "someone who needs shelter tonight").slice(0, 200);
+
+    const twiml = await registerTwilioCall(elevenLabsConfig.apiKey, {
+      agentId: elevenLabsAgentId,
+      fromNumber: fromNumber || twilioConfig.fromNumber,
+      toNumber: toNumber || "",
+      direction: "outbound",
+      dynamicVariables: {
+        shelter_name: shelterName || "the shelter",
+        survivor_context: survivorContextSafe,
+        callback_number: callbackNumber,
+      },
+    });
+
+    if (!twiml || typeof twiml !== "string" || !twiml.includes("<Response")) {
+      console.error("[connect-agent] Invalid TwiML from ElevenLabs", twiml?.slice(0, 200));
+      return sendFallback();
+    }
+
+    res.type("text/xml").set("Cache-Control", "no-store");
+    return res.status(200).send(twiml);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[connect-agent] Error:", msg);
+    if (err instanceof Error && err.stack) console.error(err.stack);
+    return sendFallback();
+  }
 });
 
 /** Extract speech or DTMF from Twilio webhook body. Maps keypad: 1=yes, 2=no, 9=hold. */
@@ -1392,23 +1505,41 @@ app.post("/api/intake", async (req: Request, res: Response) => {
             continue;
           }
           const baseUrl = getPublicBaseUrl();
-          const gatherActionUrl = baseUrl
-            ? `${baseUrl}/webhooks/twilio/gather?job_id=${encodeURIComponent(job.job_id)}&attempt_id=${encodeURIComponent(attempt.attempt_id)}`
-            : undefined;
-          const twiml = buildShelterIntakeTwiml({
-            shelterName: attempt.shelter_name,
-            survivorContext: survivorContextRaw,
-            callbackNumber: undefined,
-            scriptText: scriptResult.script,
-            audioUrl,
-            gatherActionUrl,
-          });
-          const { sid } = await createTwilioCall(twilioConfig, {
-            to: callDest,
-            twiml,
-            record: enableCallRecording,
-            recordingCallbackUrl,
-          });
+          let sid: string;
+          if (elevenLabsAgentEnabled && baseUrl) {
+            const connectUrl = `${baseUrl}/webhooks/twilio/connect-agent?job_id=${encodeURIComponent(job.job_id)}&attempt_id=${encodeURIComponent(attempt.attempt_id)}`;
+            const callResult = await createTwilioCall(twilioConfig, {
+              to: callDest,
+              url: connectUrl,
+              record: enableCallRecording,
+              recordingCallbackUrl,
+            });
+            sid = callResult.sid;
+            callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+              generated_script: "(ElevenLabs agent handles conversation)",
+              generated_script_source: "elevenlabs_agent",
+              voice_path: "elevenlabs_agent",
+            });
+          } else {
+            const gatherActionUrl = baseUrl
+              ? `${baseUrl}/webhooks/twilio/gather?job_id=${encodeURIComponent(job.job_id)}&attempt_id=${encodeURIComponent(attempt.attempt_id)}`
+              : undefined;
+            const twiml = buildShelterIntakeTwiml({
+              shelterName: attempt.shelter_name,
+              survivorContext: survivorContextRaw,
+              callbackNumber: undefined,
+              scriptText: scriptResult.script,
+              audioUrl,
+              gatherActionUrl,
+            });
+            const callResult = await createTwilioCall(twilioConfig, {
+              to: callDest,
+              twiml,
+              record: enableCallRecording,
+              recordingCallbackUrl,
+            });
+            sid = callResult.sid;
+          }
           callJobs.bindProviderSid(job.job_id, attempt.attempt_id, sid);
           callJobs.markAttempt(job.job_id, attempt.attempt_id, { status: "initiated" });
           persistCallJobState(job.job_id);

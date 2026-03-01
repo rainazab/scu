@@ -7,7 +7,9 @@ export interface TwilioConfig {
 
 export interface CreateCallInput {
   to: string;
-  twiml: string;
+  twiml?: string;
+  /** When set, Twilio fetches this URL when the call is answered. Use for ElevenLabs agent connect. */
+  url?: string;
   statusCallbackUrl?: string;
   record?: boolean;
   recordingCallbackUrl?: string;
@@ -21,7 +23,14 @@ export async function createTwilioCall(
   const form = new URLSearchParams();
   form.append("To", input.to);
   form.append("From", config.fromNumber);
-  form.append("Twiml", input.twiml);
+  if (input.url) {
+    form.append("Url", input.url);
+    form.append("Method", "POST");
+  } else if (input.twiml) {
+    form.append("Twiml", input.twiml);
+  } else {
+    throw new Error("CreateCallInput must have either url or twiml");
+  }
   const callbackUrl = input.statusCallbackUrl || config.statusCallbackUrl;
   if (callbackUrl) {
     form.append("StatusCallback", callbackUrl);
