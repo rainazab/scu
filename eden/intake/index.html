@@ -35,6 +35,25 @@
         align-items: center;
         margin-bottom: 12px;
       }
+      .alert {
+        background: #fff8e8;
+        border: 1px solid #f5d28f;
+        border-radius: 12px;
+        padding: 10px 12px;
+        color: #7a4b00;
+        margin-bottom: 12px;
+        font-size: 14px;
+      }
+      .privacy-pill {
+        display: inline-block;
+        font-size: 12px;
+        background: #eaf8ef;
+        color: #1f6b42;
+        border: 1px solid #b8e3c8;
+        border-radius: 999px;
+        padding: 6px 10px;
+        margin-bottom: 10px;
+      }
       .lang {
         border: 1px solid #cad9ff;
         background: #fff;
@@ -160,11 +179,14 @@
     <div class="app">
       <div class="top">
         <strong>Eden</strong>
-        <button id="langBtn" class="lang">Español</button>
+        <button id="langBtn" class="lang">ES</button>
       </div>
+      <div class="alert" id="safetyAlert">If you are in immediate danger, call 911 now.</div>
       <div class="card" id="wizard">
         <div class="progress" id="progress">Step 1 of 3</div>
         <div id="step1">
+          <div class="privacy-pill" id="privacyPill">No name required. No account created.</div>
+          <h1 id="heroTitle">You deserve to be safe tonight.</h1>
           <h2 id="s1title">What do you need?</h2>
           <div class="chips" id="needChips"></div>
         </div>
@@ -231,6 +253,8 @@
 
       const labels = {
         en: {
+          langShort: "EN",
+          nextLangShort: "ES",
           step: (n) => `Step ${n} of 3`,
           next: "Next",
           back: "Back",
@@ -249,11 +273,15 @@
           statusSub: "Please stay on this screen while we check availability.",
           noBeds: (n) => `We tried ${n} shelters. No beds tonight. Call 211 for free 24/7 help.`,
           found: "They're expecting you. A text has been sent.",
+          safetyAlert: "If you are in immediate danger, call 911 now.",
+          heroTitle: "You deserve to be safe tonight.",
+          privacyPill: "No name required. No account created.",
           yes: "Yes",
           no: "No",
           chips: [
+            ["dv_specific", "🛡️ Fleeing abuse or violence"],
+            ["immigrant", "🌎 Immigrant support — No status required"],
             ["shelter", "🏠 A place to sleep tonight"],
-            ["food", "🍽️ Food right now"],
             ["medical", "🏥 Medical help"],
             ["mental_health", "🧠 Mental health support"],
             ["children_support", "👨‍👩‍👧 Help with children"],
@@ -261,6 +289,8 @@
           ],
         },
         es: {
+          langShort: "ES",
+          nextLangShort: "中文",
           step: (n) => `Paso ${n} de 3`,
           next: "Siguiente",
           back: "Atrás",
@@ -279,15 +309,91 @@
           statusSub: "Quédate en esta pantalla mientras verificamos disponibilidad.",
           noBeds: (n) => `Intentamos ${n} refugios. No hay camas esta noche. Llama al 211.`,
           found: "Te están esperando. Se envió un mensaje de texto.",
+          safetyAlert: "Si estás en peligro inmediato, llama al 911 ahora.",
+          heroTitle: "Mereces estar a salvo esta noche.",
+          privacyPill: "No se requiere nombre. No se crea cuenta.",
           yes: "Sí",
           no: "No",
           chips: [
+            ["dv_specific", "🛡️ Huyendo de abuso o violencia"],
+            ["immigrant", "🌎 Apoyo para inmigrantes — sin estatus requerido"],
             ["shelter", "🏠 Un lugar para dormir esta noche"],
-            ["food", "🍽️ Comida ahora"],
             ["medical", "🏥 Ayuda médica"],
             ["mental_health", "🧠 Salud mental"],
             ["children_support", "👨‍👩‍👧 Ayuda con niños"],
             ["other", "📋 Otro"],
+          ],
+        },
+        zh: {
+          langShort: "中文",
+          nextLangShort: "VI",
+          step: (n) => `第 ${n} / 3 步`,
+          next: "下一步",
+          back: "返回",
+          submit: "立即寻找帮助 →",
+          s1title: "你现在需要什么帮助？",
+          s2title: "你的当前情况",
+          s3title: "我们如何联系你？",
+          peopleLabel: "需要帮助的人数",
+          childrenLabel: "你身边有孩子吗？",
+          petsLabel: "你有宠物吗？",
+          locLabel: "你现在在哪个城市或街区？",
+          notesLabel: "还有什么紧急情况？（可选）",
+          phoneLabel: "我们可以把结果短信发到哪个号码？",
+          privacyNote: "我们只用这个号码发送结果，不会保存你的姓名。",
+          statusTitle: "Eden 正在联系避难所...",
+          statusSub: "请留在此页面，我们正在确认床位。",
+          noBeds: (n) => `我们尝试了 ${n} 家机构，今晚暂无床位。请拨打 211 获得 24/7 免费帮助。`,
+          found: "对方已准备接待你，短信已发送。",
+          safetyAlert: "如果你正处于紧急危险，请立即拨打 911。",
+          heroTitle: "你今晚值得拥有安全。",
+          privacyPill: "无需姓名，无需注册账号。",
+          yes: "是",
+          no: "否",
+          chips: [
+            ["dv_specific", "🛡️ 正在逃离虐待或暴力"],
+            ["immigrant", "🌎 移民支持 — 不要求身份"],
+            ["shelter", "🏠 今晚需要住处"],
+            ["medical", "🏥 医疗帮助"],
+            ["mental_health", "🧠 心理支持"],
+            ["children_support", "👨‍👩‍👧 儿童相关帮助"],
+            ["other", "📋 其他"],
+          ],
+        },
+        vi: {
+          langShort: "VI",
+          nextLangShort: "EN",
+          step: (n) => `Bước ${n} / 3`,
+          next: "Tiếp",
+          back: "Quay lại",
+          submit: "Tìm hỗ trợ ngay →",
+          s1title: "Bạn cần hỗ trợ gì?",
+          s2title: "Tình huống của bạn",
+          s3title: "Liên hệ với bạn bằng cách nào?",
+          peopleLabel: "Có bao nhiêu người cần hỗ trợ?",
+          childrenLabel: "Bạn có đi cùng trẻ em không?",
+          petsLabel: "Bạn có thú cưng không?",
+          locLabel: "Bạn đang ở thành phố/khu vực nào?",
+          notesLabel: "Có gì khẩn cấp cần biết không? (tuỳ chọn)",
+          phoneLabel: "Số điện thoại để nhận kết quả qua SMS?",
+          privacyNote: "Chúng tôi chỉ dùng số này để gửi kết quả, không lưu tên của bạn.",
+          statusTitle: "Eden đang gọi các nơi trú ẩn...",
+          statusSub: "Vui lòng ở lại màn hình này khi chúng tôi kiểm tra chỗ trống.",
+          noBeds: (n) => `Đã thử ${n} nơi nhưng chưa có giường tối nay. Hãy gọi 211 để được hỗ trợ 24/7 miễn phí.`,
+          found: "Nơi tiếp nhận đã sẵn sàng. Tin nhắn đã được gửi.",
+          safetyAlert: "Nếu bạn đang gặp nguy hiểm ngay lúc này, hãy gọi 911.",
+          heroTitle: "Bạn xứng đáng được an toàn tối nay.",
+          privacyPill: "Không cần tên. Không tạo tài khoản.",
+          yes: "Có",
+          no: "Không",
+          chips: [
+            ["dv_specific", "🛡️ Đang chạy trốn bạo lực/lạm dụng"],
+            ["immigrant", "🌎 Hỗ trợ cho người nhập cư — không cần giấy tờ"],
+            ["shelter", "🏠 Nơi ở qua đêm"],
+            ["medical", "🏥 Hỗ trợ y tế"],
+            ["mental_health", "🧠 Hỗ trợ sức khỏe tinh thần"],
+            ["children_support", "👨‍👩‍👧 Hỗ trợ cho trẻ em"],
+            ["other", "📋 Khác"],
           ],
         },
       };
@@ -322,6 +428,9 @@
         document.getElementById("privacyNote").textContent = labels[lang].privacyNote;
         document.getElementById("statusTitle").textContent = labels[lang].statusTitle;
         document.getElementById("statusSub").textContent = labels[lang].statusSub;
+        document.getElementById("safetyAlert").textContent = labels[lang].safetyAlert;
+        document.getElementById("heroTitle").textContent = labels[lang].heroTitle;
+        document.getElementById("privacyPill").textContent = labels[lang].privacyPill;
         document.getElementById("nextBtn").textContent = step === 3 ? labels[lang].submit : labels[lang].next;
         document.getElementById("backBtn").textContent = labels[lang].back;
         document.getElementById("childrenYes").textContent = labels[lang].yes;
@@ -341,8 +450,10 @@
       }
 
       document.getElementById("langBtn").onclick = () => {
-        lang = lang === "en" ? "es" : "en";
-        document.getElementById("langBtn").textContent = lang === "en" ? "Español" : "English";
+        const order = ["en", "es", "zh", "vi"];
+        const idx = order.indexOf(lang);
+        lang = order[(idx + 1) % order.length];
+        document.getElementById("langBtn").textContent = labels[lang].nextLangShort;
         syncLabels();
       };
 
@@ -438,6 +549,7 @@
       setStep(1);
       syncLabels();
       renderChips();
+      document.getElementById("langBtn").textContent = labels[lang].nextLangShort;
     </script>
   </body>
 </html>

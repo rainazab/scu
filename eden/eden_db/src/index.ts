@@ -42,7 +42,15 @@ const recordingCallbackUrl = process.env.NGROK_URL
   : undefined;
 const dryRunMode = defaultCallMode === "dry_run";
 
-type IntakeNeed = "shelter" | "food" | "medical" | "mental_health" | "children_support" | "other";
+type IntakeNeed =
+  | "shelter"
+  | "dv_specific"
+  | "immigrant"
+  | "food"
+  | "medical"
+  | "mental_health"
+  | "children_support"
+  | "other";
 
 interface IntakeTracker {
   job_id: string;
@@ -218,18 +226,12 @@ async function queryNearestShelters(params: {
     distance_meters: number;
   }>
 > {
-  const primaryNeed = params.needs[0] || "shelter";
   const values: Array<string | number | boolean> = [params.lon, params.lat];
   let where = "WHERE coordinates IS NOT NULL";
 
   if (params.has_children) {
     values.push(true);
     where += ` AND accepts_children = $${values.length}`;
-  }
-
-  if (primaryNeed !== "shelter" && primaryNeed !== "children_support") {
-    values.push(`%${primaryNeed.replace("_", " ")}%`);
-    where += ` AND (description ILIKE $${values.length} OR shelter_name ILIKE $${values.length})`;
   }
 
   values.push(Math.max(1, Math.min(params.limit, 20)));
@@ -269,7 +271,19 @@ function buildSurvivorContextFromIntake(input: {
   location: string;
   notes?: string;
 }): string {
-  const needsText = input.needs.length ? input.needs.join(", ") : "shelter support";
+  const needMap: Record<IntakeNeed, string> = {
+    shelter: "emergency shelter",
+    dv_specific: "domestic violence emergency shelter - survivor fleeing abuse",
+    immigrant: "shelter that serves immigrants regardless of documentation status",
+    food: "food assistance",
+    medical: "medical care",
+    mental_health: "mental health crisis support",
+    children_support: "family shelter with children welcome",
+    other: "general support",
+  };
+  const needsText = input.needs.length
+    ? input.needs.map((n) => needMap[n] || n).join(", ")
+    : "emergency shelter";
   return `Person in ${input.location} needs: ${needsText}. Group of ${input.people_count} people${
     input.has_children ? " with children" : ""
   }. ${input.has_pets ? "Has pets." : "No pets."}${input.notes ? ` Note: ${input.notes}.` : ""}`;
@@ -304,7 +318,11 @@ async function sendFoundSms(params: {
   lines.push("", "Please arrive soon — they're expecting you.", "", "Need more help? Reply HELP or call 211 (free, 24/7).");
   const body = lines.join("\n");
 
-  if (dryRunMode) return;
+  if (dryRunMode) {
+    console.log(`[DRY RUN SMS -> ${params.callback_number}]`);
+    console.log(body);
+    return;
+  }
   await sendSms(twilioConfig, params.callback_number, body);
 }
 
@@ -321,7 +339,11 @@ No beds available tonight.
 
 Try again tomorrow morning — we'll keep searching.
 — Eden`;
-  if (dryRunMode) return;
+  if (dryRunMode) {
+    console.log(`[DRY RUN SMS -> ${params.callback_number}]`);
+    console.log(body);
+    return;
+  }
   await sendSms(twilioConfig, params.callback_number, body);
 }
 
@@ -371,6 +393,18 @@ function applyDemoProgress(jobId: string): void {
         needs_human_followup: false,
         summary: "Shelter confirmed one available bed.",
       },
+    });
+    persistCallJobState(jobId);
+  }
+
+  if (elapsedMs >= 7500) {
+    attempts.slice(3).forEach((attempt) => {
+      if (attempt.status === "queued") {
+        callJobs.markAttempt(jobId, attempt.attempt_id, {
+          status: "failed",
+          error: "No beds available",
+        });
+      }
     });
     persistCallJobState(jobId);
   }
@@ -838,11 +872,32 @@ app.post("/api/intake", async (req: Request, res: Response) => {
       "san francisco": { lat: 37.7749, lon: -122.4194 },
       "mission district": { lat: 37.7599, lon: -122.4148 },
       "soma": { lat: 37.7786, lon: -122.4059 },
+      tenderloin: { lat: 37.7831, lon: -122.4163 },
+      bayview: { lat: 37.7297, lon: -122.3928 },
+      "hunters point": { lat: 37.7269, lon: -122.3708 },
+      excelsior: { lat: 37.7244, lon: -122.4337 },
+      "richmond district": { lat: 37.7806, lon: -122.4662 },
+      "sunset district": { lat: 37.7534, lon: -122.4942 },
+      "daly city": { lat: 37.6879, lon: -122.4702 },
       oakland: { lat: 37.8044, lon: -122.2711 },
+      "east oakland": { lat: 37.7682, lon: -122.1907 },
+      "west oakland": { lat: 37.8136, lon: -122.2912 },
       "san jose": { lat: 37.3382, lon: -121.8863 },
+      "east san jose": { lat: 37.3516, lon: -121.8218 },
       berkeley: { lat: 37.8715, lon: -122.273 },
+      "west berkeley": { lat: 37.8668, lon: -122.3026 },
       fremont: { lat: 37.5483, lon: -121.9886 },
       "santa clara": { lat: 37.3541, lon: -121.9552 },
+      hayward: { lat: 37.6688, lon: -122.0808 },
+      "san leandro": { lat: 37.7258, lon: -122.1561 },
+      "san mateo": { lat: 37.563, lon: -122.3255 },
+      "redwood city": { lat: 37.4852, lon: -122.2364 },
+      "palo alto": { lat: 37.4419, lon: -122.143 },
+      "mountain view": { lat: 37.3861, lon: -122.0839 },
+      sunnyvale: { lat: 37.3688, lon: -122.0363 },
+      milpitas: { lat: 37.4323, lon: -121.8996 },
+      "south bay": { lat: 37.3382, lon: -121.8863 },
+      "east bay": { lat: 37.8044, lon: -122.2711 },
     };
     const key = location.toLowerCase();
     const matched = Object.keys(cityToCoords).find((k) => key.includes(k));
@@ -870,7 +925,7 @@ app.post("/api/intake", async (req: Request, res: Response) => {
     const targets = await queryNearestShelters({
       lat,
       lon,
-      limit: 10,
+      limit: 15,
       needs,
       has_children: hasChildren,
     });
@@ -905,47 +960,52 @@ app.post("/api/intake", async (req: Request, res: Response) => {
       has_pets: hasPets,
     });
 
-    if (!dryRunMode) {
-      for (const attempt of job.attempts) {
-        if (!attempt.to_phone) {
-          callJobs.markAttempt(job.job_id, attempt.attempt_id, {
-            status: "failed",
-            error: "Shelter does not have intake_phone configured.",
-          });
+    for (const attempt of job.attempts) {
+      if (!attempt.to_phone) {
+        callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+          status: "failed",
+          error: "Shelter does not have intake_phone configured.",
+        });
+        persistCallJobState(job.job_id);
+        continue;
+      }
+      try {
+        const scriptResult = await generateCallScript({
+          shelterName: attempt.shelter_name,
+          survivorContext: survivorContextRaw,
+          callbackNumber,
+        });
+        callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+          generated_script: scriptResult.script,
+        });
+
+        if (dryRunMode) {
+          callJobs.bindProviderSid(job.job_id, attempt.attempt_id, `DRYRUN-${attempt.attempt_id}`);
           persistCallJobState(job.job_id);
           continue;
         }
-        try {
-          const scriptResult = await generateCallScript({
-            shelterName: attempt.shelter_name,
-            survivorContext: survivorContextRaw,
-            callbackNumber,
-          });
-          callJobs.markAttempt(job.job_id, attempt.attempt_id, {
-            generated_script: scriptResult.script,
-          });
-          const twiml = buildShelterIntakeTwiml({
-            shelterName: attempt.shelter_name,
-            survivorContext: survivorContextRaw,
-            callbackNumber,
-            scriptText: scriptResult.script,
-          });
-          const { sid } = await createTwilioCall(twilioConfig, {
-            to: attempt.to_phone,
-            twiml,
-            record: enableCallRecording,
-            recordingCallbackUrl,
-          });
-          callJobs.bindProviderSid(job.job_id, attempt.attempt_id, sid);
-          callJobs.markAttempt(job.job_id, attempt.attempt_id, { status: "initiated" });
-          persistCallJobState(job.job_id);
-        } catch (error) {
-          callJobs.markAttempt(job.job_id, attempt.attempt_id, {
-            status: "failed",
-            error: error instanceof Error ? error.message : "Unknown Twilio error",
-          });
-          persistCallJobState(job.job_id);
-        }
+
+        const twiml = buildShelterIntakeTwiml({
+          shelterName: attempt.shelter_name,
+          survivorContext: survivorContextRaw,
+          callbackNumber,
+          scriptText: scriptResult.script,
+        });
+        const { sid } = await createTwilioCall(twilioConfig, {
+          to: attempt.to_phone,
+          twiml,
+          record: enableCallRecording,
+          recordingCallbackUrl,
+        });
+        callJobs.bindProviderSid(job.job_id, attempt.attempt_id, sid);
+        callJobs.markAttempt(job.job_id, attempt.attempt_id, { status: "initiated" });
+        persistCallJobState(job.job_id);
+      } catch (error) {
+        callJobs.markAttempt(job.job_id, attempt.attempt_id, {
+          status: "failed",
+          error: error instanceof Error ? error.message : "Unknown Twilio error",
+        });
+        persistCallJobState(job.job_id);
       }
     }
 
@@ -978,6 +1038,7 @@ app.get("/api/intake/status/:job_id", async (req: Request, res: Response) => {
     intake_phone?: string;
     accepts_children?: boolean;
     accepts_pets?: boolean;
+    languages_spoken?: string[];
   } = null;
 
   const availableAttempt = refreshed.attempts.find(
@@ -986,7 +1047,7 @@ app.get("/api/intake/status/:job_id", async (req: Request, res: Response) => {
 
   if (availableAttempt) {
     const shelterResult = await pool.query(
-      `SELECT shelter_name, address, city, state, intake_phone, accepts_children, accepts_pets FROM shelters WHERE id = $1`,
+      `SELECT shelter_name, address, city, state, intake_phone, accepts_children, accepts_pets, languages_spoken FROM shelters WHERE id = $1`,
       [availableAttempt.shelter_id]
     );
     const row = shelterResult.rows[0];
@@ -999,6 +1060,9 @@ app.get("/api/intake/status/:job_id", async (req: Request, res: Response) => {
         intake_phone: row.intake_phone ? String(row.intake_phone) : undefined,
         accepts_children: Boolean(row.accepts_children),
         accepts_pets: Boolean(row.accepts_pets),
+        languages_spoken: Array.isArray(row.languages_spoken)
+          ? row.languages_spoken.map((item: unknown) => String(item))
+          : [],
       };
     }
 
