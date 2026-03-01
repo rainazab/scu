@@ -35,37 +35,59 @@
         font-family: 'Inter', sans-serif;
       }
       .app {
-        max-width: 480px;
+        max-width: 520px;
         margin: 0 auto;
         min-height: 100vh;
-        padding: 16px;
+        padding: 20px 24px;
       }
       .top {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 12px;
+        margin-bottom: 16px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .brand-logo {
+        height: 52px;
+        width: 52px;
+        object-fit: contain;
+      }
+      .brand-name {
+        font-family: 'Charm', cursive;
+        font-weight: 400;
+        font-size: 38px;
+        letter-spacing: 0.2em;
+        color: #e8c9d4;
       }
       .alert {
-        background: rgba(255, 255, 255, 0.25);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        border-radius: 12px;
-        padding: 10px 12px;
-        color: #c0392b;
-        margin-bottom: 12px;
+        background: rgba(255, 255, 255, 0.28);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        border-radius: 14px;
+        padding: 12px 16px;
+        color: #a62d22;
+        margin-bottom: 16px;
         font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
         box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
       }
       .privacy-pill {
         display: inline-block;
-        font-size: 12px;
-        background: rgba(255, 255, 255, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        background: rgba(255, 255, 255, 0.25);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.4);
         border-radius: 999px;
-        padding: 6px 10px;
-        margin-bottom: 10px;
+        padding: 6px 14px;
+        margin-bottom: 16px;
       }
       .lang {
         border: none;
@@ -75,32 +97,56 @@
         color: transparent !important;
         border-radius: 999px;
         min-height: 40px;
-        padding: 0 14px;
-        font-weight: 300;
+        padding: 0 16px;
+        font-weight: 500;
+        font-size: 13px;
+        letter-spacing: 0.06em;
         position: relative;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .lang:hover {
+        transform: translateY(-1px);
       }
       .lang::before {
         content: '';
         position: absolute;
         inset: 0;
         background: rgba(255, 255, 255, 0.3);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.5);
         border-radius: 999px;
         z-index: -1;
       }
       .card {
-        background: rgba(255, 255, 255, 0.35);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        border-radius: 16px;
-        padding: 16px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.25) 100%);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 8px 48px rgba(0, 0, 0, 0.06);
       }
-      .progress { font-size: 14px; margin-bottom: 8px; }
-      h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.2; }
-      h2 { margin: 0 0 12px; font-size: 20px; }
-      p { margin: 0 0 12px; }
+      .progress-bar {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 20px;
+      }
+      .progress-dot {
+        flex: 1;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.35);
+        transition: background 0.25s ease, transform 0.2s ease;
+      }
+      .progress-dot.filled {
+        background: rgba(24, 88, 168, 0.6);
+      }
+      .progress { font-size: 12px; color: var(--muted); margin-bottom: 20px; letter-spacing: 0.08em; text-transform: uppercase; }
+      h1 { margin: 0 0 16px; font-size: 32px; line-height: 1.2; letter-spacing: 0.02em; font-weight: 600; }
+      h2 { margin: 0 0 16px; font-size: 18px; font-weight: 600; letter-spacing: 0.03em; }
+      p { margin: 0 0 14px; line-height: 1.5; }
       h1, h2, p, label, .progress, .small, .hint, strong {
         background:
           linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.15)),
@@ -120,21 +166,31 @@
       }
       .chips {
         display: grid;
-        gap: 10px;
+        gap: 12px;
       }
       .chip {
         border: 1px solid rgba(255, 255, 255, 0.5);
         background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         min-height: 48px;
-        border-radius: 12px;
-        padding: 10px 12px;
+        border-radius: 14px;
+        padding: 12px 14px;
         text-align: left;
-        font-size: 16px;
-        font-weight: 300;
+        font-size: 15px;
+        font-weight: 400;
         color: inherit;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
+      }
+      .chip:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+      .chip:focus-visible {
+        outline: 2px solid rgba(24, 88, 168, 0.5);
+        outline-offset: 2px;
       }
       .chip.active {
         background: var(--primary-soft);
@@ -142,121 +198,176 @@
         color: var(--primary);
         font-weight: 300;
       }
-      label { display: block; margin: 12px 0 6px; font-weight: 300; }
+      label { display: block; margin: 16px 0 8px; font-weight: 400; font-size: 15px; }
       input, textarea, select {
         width: 100%;
         border: 1px solid rgba(255, 255, 255, 0.5);
-        border-radius: 12px;
+        border-radius: 14px;
         min-height: 48px;
-        padding: 10px 12px;
-        font-size: 16px;
+        padding: 12px 14px;
+        font-size: 15px;
         background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
         color: #1a2d3d;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      input:focus, textarea:focus, select:focus {
+        outline: none;
+        border-color: rgba(255, 255, 255, 0.7);
+        box-shadow: 0 0 0 3px rgba(24, 88, 168, 0.15);
       }
       input::placeholder, textarea::placeholder { color: rgba(26, 45, 61, 0.6); }
       select option { background: rgba(255,255,255,0.95); color: #1a2d3d; }
       textarea { min-height: 88px; resize: vertical; }
-      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
       .yn {
         border: 1px solid rgba(255, 255, 255, 0.5);
         background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         min-height: 48px;
-        border-radius: 12px;
-        font-weight: 300;
+        border-radius: 14px;
+        font-weight: 400;
         color: inherit;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
+      }
+      .yn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+      .yn:focus-visible {
+        outline: 2px solid rgba(24, 88, 168, 0.5);
+        outline-offset: 2px;
       }
       .yn.active { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
-      .stepper { display: flex; align-items: center; gap: 12px; }
+      .stepper { display: flex; align-items: center; gap: 14px; }
       .stepper button {
         min-height: 48px;
         min-width: 56px;
         border: 1px solid rgba(255, 255, 255, 0.5);
         background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border-radius: 12px;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 14px;
         font-size: 20px;
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
         color: inherit;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        cursor: pointer;
       }
-      .actions { margin-top: 16px; display: flex; gap: 10px; }
+      .stepper button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+      .stepper #peopleCount {
+        min-width: 48px;
+        text-align: center;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .actions { margin-top: 24px; display: flex; gap: 12px; }
       .btn {
         border: none;
-        border-radius: 12px;
-        min-height: 52px;
-        padding: 0 16px;
+        border-radius: 14px;
+        min-height: 54px;
+        padding: 0 20px;
         font-size: 16px;
-        font-weight: 300;
+        font-weight: 500;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
       }
       .btn.secondary {
         background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.5);
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
         color: inherit;
       }
+      .btn.secondary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+      .btn.secondary:focus-visible {
+        outline: 2px solid rgba(24, 88, 168, 0.5);
+        outline-offset: 2px;
+      }
       .btn.primary {
-        background: rgba(255, 255, 255, 0.3);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.35);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.55);
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
         flex: 1;
       }
+      .btn.primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+      }
+      .btn.primary:focus-visible {
+        outline: 2px solid rgba(24, 88, 168, 0.5);
+        outline-offset: 2px;
+      }
       .status {
         text-align: center;
-        padding-top: 20px;
+        padding-top: 24px;
       }
       .pulse {
-        width: 84px;
-        height: 84px;
-        margin: 0 auto 14px;
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 20px;
         border-radius: 50%;
-        background: var(--primary-soft);
-        border: 2px solid var(--primary);
-        animation: pulse 1.6s infinite ease-in-out;
+        background: rgba(255, 255, 255, 0.35);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 2px solid rgba(24, 88, 168, 0.5);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        animation: pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
       }
       @keyframes pulse {
-        0% { transform: scale(0.95); opacity: 0.8; }
-        70% { transform: scale(1.06); opacity: 1; }
-        100% { transform: scale(0.95); opacity: 0.8; }
+        0%, 100% { transform: scale(0.98); opacity: 0.9; }
+        50% { transform: scale(1.04); opacity: 1; }
       }
       .log {
-        margin-top: 14px;
+        margin-top: 20px;
         text-align: left;
-        max-height: 240px;
+        max-height: 260px;
         overflow: auto;
         background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        border-radius: 12px;
-        padding: 10px;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        border-radius: 14px;
+        padding: 12px;
         box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
       }
-      .log-item { padding: 8px; border-bottom: 1px solid #ebf1ff; font-size: 14px; }
+      .log-item {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+        font-size: 14px;
+        line-height: 1.4;
+      }
+      .log-item:last-child { border-bottom: none; }
       .tag { font-weight: 300; }
       .tag.calling { color: var(--warn); }
       .tag.failed { color: var(--bad); }
       .tag.done { color: var(--ok); }
       .result-box {
-        margin-top: 16px;
+        margin-top: 20px;
         text-align: left;
         background: rgba(255, 255, 255, 0.35);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.5);
-        border-radius: 12px;
-        padding: 12px;
+        border-radius: 16px;
+        padding: 20px;
         box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
       }
+      .result-box h3 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
       .hide { display: none; }
       .small { font-size: 13px; color: var(--muted); }
       .hint {
@@ -270,14 +381,15 @@
         color: var(--muted);
       }
       .callout {
-        margin-top: 10px;
-        border-radius: 12px;
-        padding: 10px 12px;
+        margin-top: 12px;
+        border-radius: 14px;
+        padding: 12px 14px;
         font-size: 13px;
+        line-height: 1.45;
         border: 1px solid rgba(255, 255, 255, 0.5);
         background: rgba(255, 255, 255, 0.28);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
       }
       .callout.warn {
@@ -285,61 +397,96 @@
         background: rgba(255, 255, 255, 0.2);
       }
       .field-group {
-        margin-top: 8px;
+        margin-top: 12px;
       }
-    </style>
-  </head>
-  <body>
-    <div id="safetyModal" style="
-      position: fixed; inset: 0; z-index: 999;
-      background: rgba(0,0,0,0.6);
-      display: flex; align-items: center; justify-content: center;
-      padding: 24px;
-    ">
-      <div style="
-        background: rgba(255,255,255,0.35);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.5);
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .modal-glass {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.25) 100%);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
         border-radius: 20px;
         padding: 28px 24px;
         max-width: 400px;
         width: 100%;
         position: relative;
-      ">
-        <button onclick="document.getElementById('safetyModal').remove()" style="
-          position: absolute; top: 12px; right: 14px;
-          background: none; border: none; font-size: 20px; cursor: pointer; color: #3a3a3a;
-        ">✕</button>
-        <h2 style="margin: 0 0 12px; font-size: 20px; color: #3a3a3a;">Leave this site safely</h2>
-        <p style="margin: 0 0 10px; font-size: 15px; color: #3a3a3a;">You can quickly leave this website by clicking the <strong>✕</strong> in the top right or by pressing the <strong>Escape key twice</strong>.</p>
-        <p style="margin: 0; font-size: 15px; color: #3a3a3a;">To browse this site safely, be sure to regularly <strong>clear your browser history</strong>.</p>
-        <button onclick="document.getElementById('safetyModal').remove()" style="
-          margin-top: 20px; width: 100%;
-          background: rgba(255,255,255,0.3);
-          border: 1px solid rgba(255,255,255,0.5);
-          border-radius: 12px; padding: 12px;
-          font-size: 15px; cursor: pointer; color: #3a3a3a;
-          font-family: 'Inter', sans-serif; font-weight: 300;
-        ">I understand</button>
+        box-shadow: 0 8px 48px rgba(0, 0, 0, 0.15);
+      }
+      .modal-close {
+        position: absolute;
+        top: 14px;
+        right: 16px;
+        background: none;
+        border: none;
+        font-size: 22px;
+        cursor: pointer;
+        color: #3a3a3a;
+        line-height: 1;
+        opacity: 0.8;
+        transition: opacity 0.2s ease;
+      }
+      .modal-close:hover {
+        opacity: 1;
+      }
+      .modal-btn {
+        margin-top: 24px;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.35);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 14px;
+        padding: 14px;
+        font-size: 15px;
+        font-weight: 500;
+        cursor: pointer;
+        color: #3a3a3a;
+        font-family: 'Inter', sans-serif;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .modal-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="safetyModal" class="modal-overlay">
+      <div class="modal-glass">
+        <button onclick="document.getElementById('safetyModal').remove()" class="modal-close">×</button>
+        <h2 style="margin: 0 0 14px; font-size: 20px; color: #3a3a3a;">Leave this site safely</h2>
+        <p style="margin: 0 0 12px; font-size: 15px; color: #3a3a3a; line-height: 1.5;">You can quickly leave this website by clicking the <strong>×</strong> in the top right or by pressing the <strong>Escape key twice</strong>.</p>
+        <p style="margin: 0; font-size: 15px; color: #3a3a3a; line-height: 1.5;">To browse this site safely, be sure to regularly <strong>clear your browser history</strong>.</p>
+        <button onclick="document.getElementById('safetyModal').remove()" class="modal-btn">I understand</button>
       </div>
     </div>
     <div class="app">
       <div class="top">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <img src="EdenLogo.png" style="height: 62px; width: 62px; object-fit: contain;" />
-          <span style="
-            font-family: 'Charm', cursive;
-            font-weight: 400;
-            font-size: 44px;
-            letter-spacing: 0.18em;
-            color: #ffd1e1;
-          ">Eden</span>
+        <div class="brand">
+          <img src="EdenLogo.png" alt="Eden" class="brand-logo" />
+          <span class="brand-name">Eden</span>
         </div>
         <button id="langBtn" class="lang">ES</button>
       </div>
       <div class="alert" id="safetyAlert">If you are in immediate danger, call 911 now.</div>
       <div class="card" id="wizard">
+        <div class="progress-bar" id="progressBar" aria-hidden="true">
+          <div class="progress-dot filled" data-step="1"></div>
+          <div class="progress-dot" data-step="2"></div>
+          <div class="progress-dot" data-step="3"></div>
+          <div class="progress-dot" data-step="4"></div>
+        </div>
         <div class="progress" id="progress">Step 1 of 4</div>
         <div id="step1">
           <div class="privacy-pill" id="privacyPill">No name required. No account created.</div>
@@ -495,7 +642,7 @@
           step: (n) => `Step ${n} of 4`,
           next: "Next",
           back: "Back",
-          submit: "Find Help Now →",
+          submit: "Find Help Now",
           s1title: "Situation right now",
           s2title: "About your group",
           s3title: "Location and context",
@@ -549,7 +696,7 @@
           step: (n) => `Paso ${n} de 4`,
           next: "Siguiente",
           back: "Atrás",
-          submit: "Buscar ayuda ahora →",
+          submit: "Buscar ayuda ahora",
           s1title: "Situación actual",
           s2title: "Sobre tu grupo",
           s3title: "Ubicación y contexto",
@@ -689,6 +836,9 @@
         document.getElementById("step3").classList.toggle("hide", step !== 3);
         document.getElementById("step4").classList.toggle("hide", step !== 4);
         document.getElementById("backBtn").classList.toggle("hide", step === 1);
+        document.querySelectorAll(".progress-dot").forEach((dot, i) => {
+          dot.classList.toggle("filled", i + 1 <= step);
+        });
         syncLabels();
       }
 
