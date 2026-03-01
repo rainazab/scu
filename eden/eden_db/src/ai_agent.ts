@@ -14,6 +14,8 @@ export interface ParsedTranscript {
   summary: string;
 }
 
+const MAX_SCRIPT_CHARS = 1400;
+
 interface OpenAIMessage {
   role: "system" | "user";
   content: string;
@@ -66,19 +68,30 @@ function aiEnabled(): boolean {
 function buildFallbackScript(input: ScriptInput): string {
   const callbackLine = input.callbackNumber
     ? `If disconnected, please return the call at ${input.callbackNumber}.`
-    : "If disconnected, we will follow up through official shelter channels.";
+    : "If disconnected, we can call back through official shelter channels.";
 
   return [
-    `Hello, this is Eden. I am calling ${input.shelterName} to check domestic violence shelter intake availability.`,
-    `Context: ${input.survivorContext}`,
-    "Questions:",
-    "1) Do you currently have available beds today?",
-    "2) If not, do you have a waitlist or estimated callback time?",
-    "3) What intake requirements should we prepare before arrival?",
-    "4) Can you support urgent child-safe placement if needed?",
+    `Hello, this is Eden coordinating urgent shelter placement. Is this intake staff for ${input.shelterName}?`,
+    `I have someone seeking safe housing now. Context: ${input.survivorContext}`,
+    "Could I quickly confirm:",
+    "First, do you have an available bed tonight?",
+    "Second, if no bed is open now, is there a waitlist or best callback time?",
+    "Third, what intake requirements should we prepare before arrival?",
+    "Fourth, can your site support child-safe placement if needed?",
     callbackLine,
-    "Safety note: this call is for shelter coordination support and does not replace emergency response. For immediate danger, call 911.",
+    "Thanks for your help. For immediate danger, callers are directed to 911.",
   ].join("\n");
+}
+
+function sanitizeScript(raw: string): string {
+  return raw
+    .replace(/\[(?:your|my)\s+name\]/gi, "Eden")
+    .replace(/\[[^\]]+\]/g, "")
+    .replace(/\{\{[^}]+\}\}/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, MAX_SCRIPT_CHARS);
 }
 
 function normalizeParsed(input: Partial<ParsedTranscript>): ParsedTranscript {
@@ -166,15 +179,36 @@ export async function generateCallScript(input: ScriptInput): Promise<{ script: 
       {
         role: "system",
         content:
-          "You draft trauma-informed shelter outreach call scripts. Keep concise and avoid legal/medical advice.",
+          [
+            "You draft trauma-informed outbound shelter outreach scripts for live voice calls.",
+            "Write natural spoken language, not bullet lists, with 5-8 short lines.",
+            "Never use placeholders like [your name], [client], or bracket tokens.",
+            "Identify the caller as Eden and keep questions concise and practical.",
+            "Avoid legal/medical advice and avoid robotic wording.",
+            "Output plain script text only.",
+          ].join(" "),
       },
       {
         role: "user",
-        content: `Draft a phone script for outreach to ${input.shelterName}. Context: ${input.survivorContext}. Callback: ${input.callbackNumber || "none"}. Include a brief safety disclaimer.`,
+        content: [
+          `Draft a call script for outreach to ${input.shelterName}.`,
+          `Context: ${input.survivorContext}.`,
+          `Callback: ${input.callbackNumber || "none"}.`,
+          "Goal: verify immediate availability, intake requirements, and best next step.",
+          "Include one short safety line at the end.",
+        ].join(" "),
       },
     ]);
-    return { script: text, source: "openai" };
-  } catch {
+    const cleaned = sanitizeScript(text);
+    if (!cleaned) {
+      return { script: buildFallbackScript(input), source: "fallback" };
+    }
+    return { script: cleaned, source: "openai" };
+  } catch (error) {
+    console.warn("OpenAI script generation failed; using fallback script", {
+      message: error instanceof Error ? error.message : "unknown error",
+      shelter: input.shelterName,
+    });
     return { script: buildFallbackScript(input), source: "fallback" };
   }
 }

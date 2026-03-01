@@ -61,7 +61,30 @@ For more natural speech in live mode, set:
 - `ELEVENLABS_MODEL_ID`
 - `NGROK_URL` (public URL Twilio can reach for generated audio)
 
-If ElevenLabs is unavailable, Eden falls back to Twilio Polly `<Say>`.
+Live mode now requires ElevenLabs playback via Twilio `<Play>`. If ElevenLabs audio cannot be generated, the attempt is marked failed with a configuration error.
+
+## Script + Voice Diagnostics
+
+For each call attempt, Eden now tracks:
+- `generated_script_source` (`openai` or `fallback`)
+- `voice_path` (`elevenlabs_play` or `twilio_say`)
+
+You can inspect these in:
+- `GET /api/calls/jobs/:job_id`
+- `GET /api/intake/status/:job_id` (attempts list)
+
+## Troubleshooting
+
+- If calls sound robotic:
+  - verify `ELEVENLABS_API_KEY` is set and valid
+  - ensure `NGROK_URL` is public and reachable by Twilio
+  - check attempt `voice_path` is `elevenlabs_play`
+- If scripts look generic:
+  - check attempt `generated_script_source` is `openai`
+  - if `fallback`, confirm `OPENAI_API_KEY` and `OPENAI_MODEL` are valid
+- If Twilio says \"application error\":
+  - confirm `GET /api/voice/tts/:token.mp3` is reachable from ngrok
+  - verify Twilio webhook and status callback URLs point to current ngrok domain
 
 ## Run Notes
 

@@ -98,7 +98,7 @@ async function createTtsAudioUrl(text: string): Promise<string | null> {
     ttsAudioCache.set(token, { audio, created_at_ms: Date.now() });
     return `${base}/api/voice/tts/${token}.mp3`;
   } catch (error) {
-    console.error("ElevenLabs synthesis failed; falling back to Twilio Polly voice", error);
+    console.error("ElevenLabs synthesis failed for live call", error);
     return null;
   }
 }
@@ -768,8 +768,17 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
         survivorContext,
         callbackNumber: anonymousMode ? undefined : callbackNumber,
       });
+      const audioUrl =
+        mode === "live" ? (await createTtsAudioUrl(scriptResult.script)) || undefined : undefined;
+      if (mode === "live" && !audioUrl) {
+        throw new Error(
+          "Live call requires ElevenLabs audio. Check ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL_ID, and NGROK_URL."
+        );
+      }
       callJobs.markAttempt(job.job_id, attempt.attempt_id, {
         generated_script: scriptResult.script,
+        generated_script_source: scriptResult.source,
+        voice_path: mode === "live" ? "elevenlabs_play" : "twilio_say",
       });
       persistCallJobState(job.job_id);
 
@@ -800,8 +809,6 @@ app.post("/api/calls/jobs", async (req: Request, res: Response) => {
       }
 
       try {
-          const audioUrl =
-            mode === "live" ? (await createTtsAudioUrl(scriptResult.script)) || undefined : undefined;
           const twiml = buildShelterIntakeTwiml({
           shelterName: attempt.shelter_name,
           survivorContext,
@@ -1129,8 +1136,19 @@ app.post("/api/intake", async (req: Request, res: Response) => {
             survivorContext: survivorContextRaw,
             callbackNumber: undefined,
           });
+          const audioUrl =
+            defaultCallMode === "live"
+              ? (await createTtsAudioUrl(scriptResult.script)) || undefined
+              : undefined;
+          if (defaultCallMode === "live" && !audioUrl) {
+            throw new Error(
+              "Live call requires ElevenLabs audio. Check ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL_ID, and NGROK_URL."
+            );
+          }
           callJobs.markAttempt(job.job_id, attempt.attempt_id, {
             generated_script: scriptResult.script,
+            generated_script_source: scriptResult.source,
+            voice_path: defaultCallMode === "live" ? "elevenlabs_play" : "twilio_say",
           });
           persistCallJobState(job.job_id);
 
@@ -1138,11 +1156,6 @@ app.post("/api/intake", async (req: Request, res: Response) => {
             callJobs.bindProviderSid(job.job_id, attempt.attempt_id, `DRYRUN-${attempt.attempt_id}`);
             continue;
           }
-
-          const audioUrl =
-            defaultCallMode === "live"
-              ? (await createTtsAudioUrl(scriptResult.script)) || undefined
-              : undefined;
           const twiml = buildShelterIntakeTwiml({
             shelterName: attempt.shelter_name,
             survivorContext: survivorContextRaw,
@@ -1230,6 +1243,8 @@ app.get("/api/intake/status/:job_id", async (req: Request, res: Response) => {
   const attempts = refreshed.attempts.map((attempt) => ({
     shelter_name: attempt.shelter_name,
     status: toSimpleAttemptStatus(attempt.status),
+    script_source: attempt.generated_script_source || "unknown",
+    voice_path: attempt.voice_path || "unknown",
     reason:
       attempt.parsed_transcript?.availability_status === "waitlist"
         ? "no beds"

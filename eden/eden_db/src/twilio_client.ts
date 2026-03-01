@@ -103,21 +103,31 @@ export function buildShelterIntakeTwiml(context: {
     ? ` Please call back ${context.callbackNumber} if disconnected.`
     : "";
 
+  const splitIntoSayBlocks = (text: string): string[] => {
+    const chunks = text
+      .split(/\n+/)
+      .flatMap((line) => line.split(/(?<=[.!?])\s+/))
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return chunks.slice(0, 12);
+  };
+
   if (context.audioUrl) {
     const safeAudioUrl = context.audioUrl.replace(/[<>&'"]/g, "");
     return ["<Response>", `<Play>${safeAudioUrl}</Play>`, "</Response>"].join("");
   }
 
   if (safeScript) {
-    return ["<Response>", `<Say voice="Polly.Joanna">${safeScript}</Say>`, "</Response>"].join("");
+    const blocks = splitIntoSayBlocks(safeScript);
+    return ["<Response>", ...blocks.map((line) => `<Say>${line}</Say>`), "</Response>"].join("");
   }
 
   return [
     "<Response>",
-    `<Say voice="Polly.Joanna">Hello. This is Eden, coordinating domestic violence shelter availability checks.</Say>`,
-    `<Say voice="Polly.Joanna">We are calling ${context.shelterName} to ask about current intake capacity and requirements.</Say>`,
-    `<Say voice="Polly.Joanna">Context: ${safeContext}.${callbackLine}</Say>`,
-    `<Say voice="Polly.Joanna">Please connect us with intake staff or leave a voicemail instruction.</Say>`,
+    "<Say>Hello. This is Eden calling about urgent shelter intake availability.</Say>",
+    `<Say>Is this intake staff for ${context.shelterName}?</Say>`,
+    `<Say>Context: ${safeContext}.${callbackLine}</Say>`,
+    "<Say>Please connect us with intake staff, or share voicemail instructions for immediate placement follow-up.</Say>",
     "</Response>",
   ].join("");
 }
@@ -125,7 +135,7 @@ export function buildShelterIntakeTwiml(context: {
 export function buildConferenceJoinTwiml(conferenceName: string): string {
   return [
     "<Response>",
-    "<Say voice=\"Polly.Joanna\">Connecting you to an Eden assisted transfer line.</Say>",
+    "<Say>Connecting you to an Eden assisted transfer line.</Say>",
     "<Dial>",
     `<Conference startConferenceOnEnter="true" endConferenceOnExit="false">${conferenceName}</Conference>`,
     "</Dial>",

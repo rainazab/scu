@@ -19,6 +19,8 @@ export interface CallAttempt {
   to_phone: string | null;
   status: CallAttemptStatus;
   generated_script?: string;
+  generated_script_source?: "openai" | "fallback";
+  voice_path?: "elevenlabs_play" | "twilio_say";
   provider_call_sid?: string;
   recording_url?: string;
   error?: string;
